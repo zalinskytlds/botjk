@@ -1,0 +1,21 @@
+{
+  "name": "bot-whatsapp-jk",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp para gerenciar grupos de Lavanderia e Encomendas",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "keywords": ["whatsapp", "bot", "baileys", "automacao"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.20",
+    "axios": "^1.12.2",
+    "express": "^5.1.0",
+    "moment-timezone": "^0.6.0",
+    "pino": "^10.0.0",
+    "qrcode": "^1.5.4"
+  }
+}
