@@ -7,15 +7,18 @@
     "start": "node index.js",
     "dev": "node index.js"
   },
-  "keywords": ["whatsapp", "bot", "baileys", "automacao"],
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys",
+    "automacao"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.20",
-    "axios": "^1.12.2",
-    "express": "^5.1.0",
-    "moment-timezone": "^0.6.0",
-    "pino": "^10.0.0",
-    "qrcode": "^1.5.4"
+    "@whiskeysockets/baileys": "^6.7.7",
+    "axios": "^1.7.7",
+    "moment-timezone": "^0.5.46",
+    "dotenv": "^16.4.5"
   }
 }
