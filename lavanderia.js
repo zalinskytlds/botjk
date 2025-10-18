@@ -189,7 +189,6 @@ module.exports = {
   enviarBoasVindas,
 };
 
-
     // Opção 5: Entrar na Fila
     if (texto === "5" || texto.includes("entrar na fila")) {
       if (!lavagemAtiva) {
@@ -209,9 +208,11 @@ module.exports = {
       }
 
       filaDeEspera.push({ usuario: numero, jid: remetente });
-      
+
       await sock.sendMessage(grupoId, {
-        text: `⏳ @${numero} entrou na fila!\n📊 Posição: ${filaDeEspera.length}º\n\n*Fila atual:*\n${filaDeEspera.map((p, i) => `${i + 1}. @${p.usuario}`).join("\n")}`,
+        text: `⏳ @${numero} entrou na fila!\n📊 Posição: ${filaDeEspera.length}º\n\n*Fila atual:*\n${filaDeEspera
+          .map((p, i) => `${i + 1}. @${p.usuario}`)
+          .join("\n")}`,
         mentions: [remetente],
       });
       return;
@@ -220,7 +221,7 @@ module.exports = {
     // Opção 6: Sair da Fila
     if (texto === "6" || texto.includes("sair da fila")) {
       const index = filaDeEspera.findIndex((p) => p.jid === remetente);
-      
+
       if (index === -1) {
         await sock.sendMessage(grupoId, {
           text: "ℹ️ Você não está na fila.",
@@ -229,7 +230,7 @@ module.exports = {
       }
 
       filaDeEspera.splice(index, 1);
-      
+
       await sock.sendMessage(grupoId, {
         text: `🚶‍♂️ @${numero} saiu da fila!`,
         mentions: [remetente],
@@ -238,42 +239,41 @@ module.exports = {
     }
 
     // Opção 7: Sortear Roupas
-if (texto === "7" || texto.includes("sortear")) {
-  const roupas = [
-    "👕 Camiseta",
-    "👖 Calça",
-    "🧦 Meias",
-    "👔 Camisa",
-    "🩳 Shorts",
-    "👗 Vestido",
-    "🩱 Roupa íntima",
-    "👚 Blusa",
-    "👕 Regata",
-    "👖 Legging",
-    "🧤 Luvas",
-    "🧣 Cachecol",
-    "🩲 Cueca",
-    "🩱 Sutiã",
-    "🛏️ Lençol",
-    "🛏️ Fronha",
-    "🧺 Toalha de rosto",
-    "🧼 Toalha de banho",
-    "👕 Pijama"
-  ];
+    if (texto === "7" || texto.includes("sortear")) {
+      const roupas = [
+        "👕 Camiseta",
+        "👖 Calça",
+        "🧦 Meias",
+        "👔 Camisa",
+        "🩳 Shorts",
+        "👗 Vestido",
+        "🩱 Roupa íntima",
+        "👚 Blusa",
+        "👕 Regata",
+        "👖 Legging",
+        "🧤 Luvas",
+        "🧣 Cachecol",
+        "🩲 Cueca",
+        "🩱 Sutiã",
+        "🛏️ Lençol",
+        "🛏️ Fronha",
+        "🧺 Toalha de rosto",
+        "🧼 Toalha de banho",
+        "👕 Pijama",
+      ];
 
-  const sorteada = roupas[Math.floor(Math.random() * roupas.length)];
+      const sorteada = roupas[Math.floor(Math.random() * roupas.length)];
 
-  await sock.sendMessage(grupoId, {
-    text: `🎲 *SORTEIO DE ROUPAS*\n\n@${numero} tirou: ${sorteada}!\n\n😄 Boa sorte na lavagem!`,
-    mentions: [remetente],
-  });
-  return;
-}
-
+      await sock.sendMessage(grupoId, {
+        text: `🎲 *SORTEIO DE ROUPAS*\n\n@${numero} tirou: ${sorteada}!\n\n😄 Boa sorte na lavagem!`,
+        mentions: [remetente],
+      });
+      return;
+    }
 
     // Opção 8: Horário de Funcionamento
-if (texto === "8" || texto.includes("horário") || texto.includes("horario")) {
-  const horarios = `⏰ *HORÁRIO DE FUNCIONAMENTO*
+    if (texto === "8" || texto.includes("horário") || texto.includes("horario")) {
+      const horarios = `⏰ *HORÁRIO DE FUNCIONAMENTO*
 
 🗓️ Todos os dias: 07:00 - 20:00
 
@@ -282,36 +282,32 @@ A *última lavagem deve começar até as 20h* para que seja *finalizada até as 
 
 🔕 Evite usar as máquinas após as 22h, em qualquer dia.`;
 
-  await sock.sendMessage(grupoId, { text: horarios });
-  return;
-}
-
-
-    // Opção 9: Previsão do Tempo
-if (texto === "9" || texto.includes("previsão") || texto.includes("previsao") || texto.includes("tempo")) {
-  try {
-    const { data } = await axios.get(
-      "https://api.hgbrasil.com/weather?key=31f0dad0&city_name=Viamão,RS"
-    );
-
-    const info = data.results;
-
-    // Normaliza a descrição para facilitar a análise
-    const condicao = info.description.toLowerCase();
-
-    // Define dica personalizada
-    let dica = "🧺 Aproveite o dia para lavar suas roupas!";
-    if (condicao.includes("chuva") || condicao.includes("tempestade")) {
-      dica = "🌧️ Vai chover! Evite estender roupas ao ar livre e use o varal interno.";
-    } else if (condicao.includes("nublado")) {
-      dica = "⛅ Dia nublado. Pode lavar, mas prefira secar em local coberto.";
-    } else if (condicao.includes("sol")) {
-      dica = "☀️ Sol forte! Ótimo dia para secar roupas rapidamente.";
-    } else if (condicao.includes("neblina")) {
-      dica = "🌫️ Neblina presente. O tempo úmido pode atrasar a secagem.";
+      await sock.sendMessage(grupoId, { text: horarios });
+      return;
     }
 
-    const mensagem = `🌦️ *PREVISÃO DO TEMPO - ${info.city}*  
+    // Opção 9: Previsão do Tempo
+    if (texto === "9" || texto.includes("previsão") || texto.includes("previsao") || texto.includes("tempo")) {
+      try {
+        const { data } = await axios.get(
+          "https://api.hgbrasil.com/weather?key=31f0dad0&city_name=Viamão,RS"
+        );
+
+        const info = data.results;
+        const condicao = info.description.toLowerCase();
+        let dica = "🧺 Aproveite o dia para lavar suas roupas!";
+
+        if (condicao.includes("chuva") || condicao.includes("tempestade")) {
+          dica = "🌧️ Vai chover! Evite estender roupas ao ar livre e use o varal interno.";
+        } else if (condicao.includes("nublado")) {
+          dica = "⛅ Dia nublado. Pode lavar, mas prefira secar em local coberto.";
+        } else if (condicao.includes("sol")) {
+          dica = "☀️ Sol forte! Ótimo dia para secar roupas rapidamente.";
+        } else if (condicao.includes("neblina")) {
+          dica = "🌫️ Neblina presente. O tempo úmido pode atrasar a secagem.";
+        }
+
+        const mensagem = `🌦️ *PREVISÃO DO TEMPO - ${info.city}*  
 📅 ${info.date}  
 🌡️ Temperatura: ${info.temp}°C  
 🌤️ Condição: ${info.description}  
@@ -324,21 +320,20 @@ if (texto === "9" || texto.includes("previsão") || texto.includes("previsao") |
 
 📍 *Atualizado automaticamente via HGBrasil API*`;
 
-    await sock.sendMessage(grupoId, { text: mensagem });
-  } catch (err) {
-    console.error("❌ Erro ao obter previsão do tempo:", err.message);
-    await sock.sendMessage(grupoId, {
-      text: "⚠️ Não foi possível obter a previsão do tempo no momento. Tente novamente mais tarde.",
-    });
-  }
-  return;
-}
+        await sock.sendMessage(grupoId, { text: mensagem });
+      } catch (err) {
+        console.error("❌ Erro ao obter previsão do tempo:", err.message);
+        await sock.sendMessage(grupoId, {
+          text: "⚠️ Não foi possível obter a previsão do tempo no momento. Tente novamente mais tarde.",
+        });
+      }
+      return;
+    }
 
-
-  // Opção 10: Coleta de Lixo
-if (texto === "10" || texto.includes("lixo") || texto.includes("coleta")) {
-  const hoje = moment.tz("America/Sao_Paulo").format("dddd"); // Dia atual
-  const coleta = `🗑️ *COLETA DE LIXO*
+    // Opção 10: Coleta de Lixo
+    if (texto === "10" || texto.includes("lixo") || texto.includes("coleta")) {
+      const hoje = moment.tz("America/Sao_Paulo").format("dddd");
+      const coleta = `🗑️ *COLETA DE LIXO*
 
 📅 Hoje é *${hoje}*
 
@@ -361,6 +356,19 @@ pois a coleta ocorre *a cada 2 dias*. Dessa forma, evitamos acúmulo e mantemos 
 
 💚 *Separar e descartar corretamente ajuda o meio ambiente e facilita o trabalho dos catadores!*`;
 
-  await sock.sendMessage(grupoId, { text: coleta });
-  return;
-}
+      await sock.sendMessage(grupoId, { text: coleta });
+      return;
+    }
+
+  } catch (err) {
+    console.error("❌ Erro ao processar mensagem da lavanderia:", err.message);
+    await sock.sendMessage(grupoId, {
+      text: "❌ Ocorreu um erro ao processar seu comando. Tente novamente.",
+    });
+  }
+} // ← FECHAMENTO CORRETO DA FUNÇÃO
+
+module.exports = {
+  tratarMensagemLavanderia,
+  enviarBoasVindas,
+};
