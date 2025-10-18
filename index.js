@@ -381,7 +381,7 @@ app.get("/qr", (req, res) => {
 });
 
 // Inicia servidor HTTP
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
   console.log(`📱 Acesse http://localhost:${PORT}/qr para ver o QR Code`);
