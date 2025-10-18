@@ -16,7 +16,7 @@ function obterSaudacao() {
 }
 
 function obterMenuLavanderia() {
-  return `🧺 *MENU LAVANDERIA UNIVERSITÁRIA*
+  return `🧺 *MENU LAVANDERIA JK UNIVERSITÁRIO*
 
 1️⃣ Dicas de uso 🧼
 2️⃣ Info Lavadora ⚙️
