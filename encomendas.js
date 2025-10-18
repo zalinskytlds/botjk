@@ -30,8 +30,7 @@ function obterMenuEncomendas() {
 Digite o número da opção desejada ou use os comandos:
 • *!ping* - Verificar status do bot
 • *!ajuda* ou *menu* - Ver este menu
-• *!info* - Informações do grupo
-• *!todos* - Mencionar todos os membros`;
+• *!info* - Informações do grupo;
 }
 
 /**
