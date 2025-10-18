@@ -2,9 +2,9 @@ const moment = require("moment-timezone");
 const axios = require("axios");
 
 // 📦 URLs da API SheetDB (você deve substituir pelas suas URLs reais)
-const URL_SHEETDB_ENCOMENDAS = process.env.SHEETDB_ENCOMENDAS || "https://sheetdb.io/api/v1/SEU_ID_ENCOMENDAS";
-const URL_SHEETDB_HISTORICO = process.env.SHEETDB_HISTORICO || "https://sheetdb.io/api/v1/SEU_ID_HISTORICO";
-const URL_SHEETDB_LOG = process.env.SHEETDB_LOG || "https://sheetdb.io/api/v1/7x5ujfu3x3vyb";
+const URL_SHEETDB_ENCOMENDAS = process.env.SHEETDB_ENCOMENDAS || "https://script.google.com/macros/s/AKfycbzBKHN0yIkO85Kh3QxkjGsSUzpmBjs2fqmovZoUPWMDUrjRl5uTE3UtXX6zcLmyktX3Jw/exec";
+const URL_SHEETDB_HISTORICO = process.env.SHEETDB_HISTORICO || "https://script.google.com/macros/s/AKfycbwj1pd6zqZFqqDgPqleEAT6ctgUAZCsbMKoXjEdR1OPd9DY6kxL3rDmjYweda7ur_So/exec";
+const URL_SHEETDB_LOG = process.env.SHEETDB_LOG || "https://script.google.com/macros/s/AKfycbyGlZrTV048EKeqsj290mj1IZitDMcfUGbjgatVjzT_-hxlowoo1l8yj_WZog3pI_Bo/exec";
 
 /**
  * Formata o horário no timezone de São Paulo
