@@ -73,13 +73,13 @@ async function tratarMensagemLavanderia(sock, msg) {
   console.log(`🧺 [LAVANDERIA] Mensagem de @${numero}: ${texto}`);
 
   try {
-    // menu
+    // Menu
     if (texto === "menu" || texto === "!ajuda") {
       await sock.sendMessage(grupoId, { text: obterMenuLavanderia() });
       return;
     }
 
-    // opção 2
+    // Opção 2 - Info Lavadora
     if (texto === "2") {
       await sock.sendMessage(grupoId, {
         text: "🧾 *Informações da Lavadora*\nElectrolux 8,5Kg LT09E\nConsumo: 112L / 0,25kWh por ciclo\nVelocidade: 660 rpm\nTensão: 220V\nEficiência: A",
@@ -87,7 +87,7 @@ async function tratarMensagemLavanderia(sock, msg) {
       return;
     }
 
-    // opção 3 - iniciar lavagem
+    // Opção 3 - Iniciar lavagem
     if (texto === "3" || texto.includes("iniciar")) {
       if (lavagemAtiva) {
         await sock.sendMessage(grupoId, {
@@ -100,7 +100,7 @@ async function tratarMensagemLavanderia(sock, msg) {
       const saudacao = obterSaudacao();
       const inicio = moment.tz("America/Sao_Paulo");
       const fim = inicio.clone().add(2, "hours");
-      const tempoAvisoAntesDoFim = 10; // minutos antes de avisar
+      const tempoAvisoAntesDoFim = 10;
 
       lavagemAtiva = {
         usuario: numero,
@@ -114,7 +114,6 @@ async function tratarMensagemLavanderia(sock, msg) {
         mentions: [remetente],
       });
 
-      // ⏳ aviso 10 minutos antes do fim
       setTimeout(async () => {
         await sock.sendMessage(grupoId, {
           text: `🔔 @${numero}, sua lavagem vai finalizar em ${tempoAvisoAntesDoFim} minutos.`,
@@ -122,17 +121,14 @@ async function tratarMensagemLavanderia(sock, msg) {
         });
       }, (120 - tempoAvisoAntesDoFim) * 60 * 1000);
 
-      // 🧼 aviso automático quando termina
       setTimeout(async () => {
         await sock.sendMessage(grupoId, {
           text: `✅ @${numero}, sua lavagem terminou!\n🧺 A máquina agora está livre.`,
           mentions: [remetente],
         });
 
-        // libera a máquina automaticamente
         lavagemAtiva = null;
 
-        // se houver fila, avisa o próximo
         if (filaDeEspera.length > 0) {
           const proximo = filaDeEspera.shift();
           await sock.sendMessage(grupoId, {
@@ -140,17 +136,15 @@ async function tratarMensagemLavanderia(sock, msg) {
             mentions: [proximo.jid],
           });
         }
-      }, 120 * 60 * 1000); // 2 horas
+      }, 120 * 60 * 1000);
 
       return;
     }
 
-    // opção 4 - finalizar lavagem manualmente
+    // Opção 4 - Finalizar lavagem manual
     if (texto === "4" || texto.includes("finalizar")) {
       if (!lavagemAtiva) {
-        await sock.sendMessage(grupoId, {
-          text: "ℹ️ Nenhuma lavagem está ativa no momento.",
-        });
+        await sock.sendMessage(grupoId, { text: "ℹ️ Nenhuma lavagem está ativa no momento." });
         return;
       }
 
@@ -176,136 +170,67 @@ async function tratarMensagemLavanderia(sock, msg) {
       return;
     }
 
-  } catch (err) {
-    console.error("❌ Erro ao processar mensagem da lavanderia:", err.message);
-    await sock.sendMessage(grupoId, {
-      text: "❌ Ocorreu um erro ao processar seu comando. Tente novamente.",
-    });
-  }
-}
-
-module.exports = {
-  tratarMensagemLavanderia,
-  enviarBoasVindas,
-};
-
-    // Opção 5: Entrar na Fila
+    // ----------------------
+    // Opção 5 - Entrar na fila
     if (texto === "5" || texto.includes("entrar na fila")) {
       if (!lavagemAtiva) {
-        await sock.sendMessage(grupoId, {
-          text: "🟢 A máquina está disponível! Use a opção *3* para iniciar.",
-        });
+        await sock.sendMessage(grupoId, { text: "🟢 A máquina está disponível! Use a opção *3* para iniciar." });
         return;
       }
 
-      const jaEstaFila = filaDeEspera.find((p) => p.jid === remetente);
-      if (jaEstaFila) {
-        await sock.sendMessage(grupoId, {
-          text: `ℹ️ Você já está na fila, @${numero}!`,
-          mentions: [remetente],
-        });
+      if (filaDeEspera.find((p) => p.jid === remetente)) {
+        await sock.sendMessage(grupoId, { text: `ℹ️ Você já está na fila, @${numero}!`, mentions: [remetente] });
         return;
       }
 
       filaDeEspera.push({ usuario: numero, jid: remetente });
-
       await sock.sendMessage(grupoId, {
-        text: `⏳ @${numero} entrou na fila!\n📊 Posição: ${filaDeEspera.length}º\n\n*Fila atual:*\n${filaDeEspera
-          .map((p, i) => `${i + 1}. @${p.usuario}`)
-          .join("\n")}`,
+        text: `⏳ @${numero} entrou na fila!\n📊 Posição: ${filaDeEspera.length}º\n\n*Fila atual:*\n${filaDeEspera.map((p, i) => `${i + 1}. @${p.usuario}`).join("\n")}`,
         mentions: [remetente],
       });
       return;
     }
 
-    // Opção 6: Sair da Fila
+    // Opção 6 - Sair da fila
     if (texto === "6" || texto.includes("sair da fila")) {
       const index = filaDeEspera.findIndex((p) => p.jid === remetente);
-
       if (index === -1) {
-        await sock.sendMessage(grupoId, {
-          text: "ℹ️ Você não está na fila.",
-        });
+        await sock.sendMessage(grupoId, { text: "ℹ️ Você não está na fila." });
         return;
       }
 
       filaDeEspera.splice(index, 1);
-
-      await sock.sendMessage(grupoId, {
-        text: `🚶‍♂️ @${numero} saiu da fila!`,
-        mentions: [remetente],
-      });
+      await sock.sendMessage(grupoId, { text: `🚶‍♂️ @${numero} saiu da fila!`, mentions: [remetente] });
       return;
     }
 
-    // Opção 7: Sortear Roupas
+    // Opção 7 - Sortear roupas
     if (texto === "7" || texto.includes("sortear")) {
-      const roupas = [
-        "👕 Camiseta",
-        "👖 Calça",
-        "🧦 Meias",
-        "👔 Camisa",
-        "🩳 Shorts",
-        "👗 Vestido",
-        "🩱 Roupa íntima",
-        "👚 Blusa",
-        "👕 Regata",
-        "👖 Legging",
-        "🧤 Luvas",
-        "🧣 Cachecol",
-        "🩲 Cueca",
-        "🩱 Sutiã",
-        "🛏️ Lençol",
-        "🛏️ Fronha",
-        "🧺 Toalha de rosto",
-        "🧼 Toalha de banho",
-        "👕 Pijama",
-      ];
-
+      const roupas = ["👕 Camiseta","👖 Calça","🧦 Meias","👔 Camisa","🩳 Shorts","👗 Vestido","🩱 Roupa íntima","👚 Blusa","👕 Regata","👖 Legging","🧤 Luvas","🧣 Cachecol","🩲 Cueca","🩱 Sutiã","🛏️ Lençol","🛏️ Fronha","🧺 Toalha de rosto","🧼 Toalha de banho","👕 Pijama"];
       const sorteada = roupas[Math.floor(Math.random() * roupas.length)];
-
-      await sock.sendMessage(grupoId, {
-        text: `🎲 *SORTEIO DE ROUPAS*\n\n@${numero} tirou: ${sorteada}!\n\n😄 Boa sorte na lavagem!`,
-        mentions: [remetente],
-      });
+      await sock.sendMessage(grupoId, { text: `🎲 *SORTEIO DE ROUPAS*\n\n@${numero} tirou: ${sorteada}!\n\n😄 Boa sorte na lavagem!`, mentions: [remetente] });
       return;
     }
 
-    // Opção 8: Horário de Funcionamento
+    // Opção 8 - Horário de funcionamento
     if (texto === "8" || texto.includes("horário") || texto.includes("horario")) {
-      const horarios = `⏰ *HORÁRIO DE FUNCIONAMENTO*
-
-🗓️ Todos os dias: 07:00 - 20:00
-
-⚠️ *Aviso Importante:*
-A *última lavagem deve começar até as 20h* para que seja *finalizada até as 22h*, respeitando o horário de silêncio do condomínio. 🕊️
-
-🔕 Evite usar as máquinas após as 22h, em qualquer dia.`;
-
+      const horarios = `⏰ *HORÁRIO DE FUNCIONAMENTO*\n\n🗓️ Todos os dias: 07:00 - 20:00\n\n⚠️ *Aviso Importante:*\nA *última lavagem deve começar até as 20h* para que seja *finalizada até as 22h*, respeitando o horário de silêncio do condomínio. 🕊️\n\n🔕 Evite usar as máquinas após as 22h, em qualquer dia.`;
       await sock.sendMessage(grupoId, { text: horarios });
       return;
     }
 
-    // Opção 9: Previsão do Tempo
+    // Opção 9 - Previsão do tempo
     if (texto === "9" || texto.includes("previsão") || texto.includes("previsao") || texto.includes("tempo")) {
       try {
-        const { data } = await axios.get(
-          "https://api.hgbrasil.com/weather?key=31f0dad0&city_name=Viamão,RS"
-        );
-
+        const { data } = await axios.get("https://api.hgbrasil.com/weather?key=31f0dad0&city_name=Viamão,RS");
         const info = data.results;
-        const condicao = info.description.toLowerCase();
         let dica = "🧺 Aproveite o dia para lavar suas roupas!";
+        const condicao = info.description.toLowerCase();
 
-        if (condicao.includes("chuva") || condicao.includes("tempestade")) {
-          dica = "🌧️ Vai chover! Evite estender roupas ao ar livre e use o varal interno.";
-        } else if (condicao.includes("nublado")) {
-          dica = "⛅ Dia nublado. Pode lavar, mas prefira secar em local coberto.";
-        } else if (condicao.includes("sol")) {
-          dica = "☀️ Sol forte! Ótimo dia para secar roupas rapidamente.";
-        } else if (condicao.includes("neblina")) {
-          dica = "🌫️ Neblina presente. O tempo úmido pode atrasar a secagem.";
-        }
+        if (condicao.includes("chuva") || condicao.includes("tempestade")) dica = "🌧️ Vai chover! Evite estender roupas ao ar livre e use o varal interno.";
+        else if (condicao.includes("nublado")) dica = "⛅ Dia nublado. Pode lavar, mas prefira secar em local coberto.";
+        else if (condicao.includes("sol")) dica = "☀️ Sol forte! Ótimo dia para secar roupas rapidamente.";
+        else if (condicao.includes("neblina")) dica = "🌫️ Neblina presente. O tempo úmido pode atrasar a secagem.";
 
         const mensagem = `🌦️ *PREVISÃO DO TEMPO - ${info.city}*  
 📅 ${info.date}  
@@ -323,38 +248,15 @@ A *última lavagem deve começar até as 20h* para que seja *finalizada até as 
         await sock.sendMessage(grupoId, { text: mensagem });
       } catch (err) {
         console.error("❌ Erro ao obter previsão do tempo:", err.message);
-        await sock.sendMessage(grupoId, {
-          text: "⚠️ Não foi possível obter a previsão do tempo no momento. Tente novamente mais tarde.",
-        });
+        await sock.sendMessage(grupoId, { text: "⚠️ Não foi possível obter a previsão do tempo no momento. Tente novamente mais tarde." });
       }
       return;
     }
 
-    // Opção 10: Coleta de Lixo
+    // Opção 10 - Coleta de lixo
     if (texto === "10" || texto.includes("lixo") || texto.includes("coleta")) {
       const hoje = moment.tz("America/Sao_Paulo").format("dddd");
-      const coleta = `🗑️ *COLETA DE LIXO*
-
-📅 Hoje é *${hoje}*
-
-♻️ *Lixo Reciclável:* Terça, Quinta e Sábado  
-🗑️ *Lixo Orgânico e Comum:* Segunda, Quarta e Sexta  
-
-⏰ *Horário:* Deixar o lixo até às 19h na área designada.
-
-🔹 *Orientações importantes:*
-- Separe o lixo *reciclável* (papel, plástico, vidro, metal) do *orgânico* (restos de alimentos, cascas, etc.).  
-- Mantenha uma *sacola separada apenas para recicláveis*, facilitando o trabalho dos catadores.  
-- Sempre *amarre bem as sacolas* antes de colocar para fora.  
-- Use preferencialmente:
-  🟦 *Sacos azuis* ou *sacolas brancas de supermercado* → para recicláveis  
-  ⬛ *Sacos pretos* → para lixo comum e orgânico  
-
-🚮 *Importante:*  
-Caso os sacos de lixo estejam na *calçada*, o descarte será feito junto com os demais moradores,  
-pois a coleta ocorre *a cada 2 dias*. Dessa forma, evitamos acúmulo e mantemos o local limpo e organizado.  
-
-💚 *Separar e descartar corretamente ajuda o meio ambiente e facilita o trabalho dos catadores!*`;
+      const coleta = `🗑️ *COLETA DE LIXO*\n\n📅 Hoje é *${hoje}*\n\n♻️ *Lixo Reciclável:* Terça, Quinta e Sábado\n🗑️ *Lixo Orgânico e Comum:* Segunda, Quarta e Sexta\n\n⏰ *Horário:* Deixar o lixo até às 19h na área designada.\n\n🔹 *Orientações importantes:*\n- Separe o lixo *reciclável* (papel, plástico, vidro, metal) do *orgânico* (restos de alimentos, cascas, etc.).\n- Mantenha uma *sacola separada apenas para recicláveis*, facilitando o trabalho dos catadores.\n- Sempre *amarre bem as sacolas* antes de colocar para fora.\n- Use preferencialmente:\n  🟦 *Sacos azuis* ou *sacolas brancas de supermercado* → para recicláveis\n  ⬛ *Sacos pretos* → para lixo comum e orgânico\n\n🚮 *Importante:*\nCaso os sacos de lixo estejam na *calçada*, o descarte será feito junto com os demais moradores,\npois a coleta ocorre *a cada 2 dias*. Dessa forma, evitamos acúmulo e mantemos o local limpo e organizado.\n\n💚 *Separar e descartar corretamente ajuda o meio ambiente e facilita o trabalho dos catadores!*`;
 
       await sock.sendMessage(grupoId, { text: coleta });
       return;
@@ -362,11 +264,9 @@ pois a coleta ocorre *a cada 2 dias*. Dessa forma, evitamos acúmulo e mantemos 
 
   } catch (err) {
     console.error("❌ Erro ao processar mensagem da lavanderia:", err.message);
-    await sock.sendMessage(grupoId, {
-      text: "❌ Ocorreu um erro ao processar seu comando. Tente novamente.",
-    });
+    await sock.sendMessage(grupoId, { text: "❌ Ocorreu um erro ao processar seu comando. Tente novamente." });
   }
-} // ← FECHAMENTO CORRETO DA FUNÇÃO
+}
 
 module.exports = {
   tratarMensagemLavanderia,
