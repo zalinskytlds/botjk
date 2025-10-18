@@ -480,14 +480,59 @@ async function tratarMensagemLavanderia(sock, msg) {
     }
 
     // ----------------------
-    // Opção 7 - Sortear roupas
-    // ----------------------
-    if (texto === "7" || texto.includes("sortear")) {
-      const roupas = ["👕 Camiseta","👖 Calça","🧦 Meias","👔 Camisa","🩳 Shorts","👗 Vestido","🩱 Roupa íntima","👚 Blusa","👕 Regata","👖 Legging","🧤 Luvas","🧣 Cachecol","🩲 Cueca","🩱 Sutiã","🛏️ Lençol","🛏️ Fronha","🧺 Toalha de rosto","🧼 Toalha de banho","👕 Pijama"];
-      const sorteada = roupas[Math.floor(Math.random() * roupas.length)];
-      await sock.sendMessage(grupoId, { text: `🎲 *SORTEIO DE ROUPAS*\n\n@${numero} tirou: ${sorteada}!\n\n😄 Boa sorte na lavagem!`, mentions: [remetente] });
-      return;
+    // --- OPÇÃO 7: SORTEAR ROUPAS ---
+  if (texto === "7") {
+    const roupas = [
+  { nome: "Camiseta", peso: 0.2 },
+  { nome: "Regata", peso: 0.15 },
+  { nome: "Calça Jeans", peso: 0.6 },
+  { nome: "Calça Legging", peso: 0.4 },
+  { nome: "Bermuda", peso: 0.3 },
+  { nome: "Moletom", peso: 0.8 },
+  { nome: "Pijama", peso: 0.6 },
+  { nome: "Camisa Social", peso: 0.25 },
+  { nome: "Blusa", peso: 0.2 },
+  { nome: "Meias", peso: 0.05 },
+  { nome: "Roupa Íntima", peso: 0.05 },
+  { nome: "Shorts", peso: 0.25 },
+  { nome: "Toalha de Rosto", peso: 0.15 },
+  { nome: "Toalha de Banho", peso: 0.4 },
+  { nome: "Lençol Solteiro", peso: 0.5 },
+  { nome: "Lençol Casal", peso: 0.7 },
+  { nome: "Fronha", peso: 0.1 },
+  { nome: "Blusa de Frio Leve", peso: 0.4 },
+  { nome: "Camisa de Manga Longa", peso: 0.3 },
+  { nome: "Cachecol", peso: 0.1 },
+  { nome: "Luvas", peso: 0.05 }
+];
+
+
+    const pesoMax = 8.0;
+    let pesoAtual = 0;
+    let selecionadas = [];
+
+    while (pesoAtual < pesoMax) {
+      const roupa = roupas[Math.floor(Math.random() * roupas.length)];
+      if (pesoAtual + roupa.peso > pesoMax) break;
+      selecionadas.push(roupa.nome);
+      pesoAtual += roupa.peso;
     }
+
+    const contagem = selecionadas.reduce(
+      (a, n) => ((a[n] = (a[n] || 0) + 1), a),
+      {}
+    );
+    const lista = Object.entries(contagem)
+      .map(([nome, qtd]) => `- ${qtd}x ${nome}`)
+      .join("\n");
+
+    await enviar({
+      text: `🧺 Lavagem sorteada (até 8kg):\n${lista}\n\nPeso total: ${pesoAtual.toFixed(
+        2
+      )}kg`,
+    });
+    return;
+  }
 
     // ----------------------
     // Opção 8 - Horário de funcionamento
