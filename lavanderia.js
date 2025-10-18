@@ -32,8 +32,7 @@ function obterMenuLavanderia() {
 Digite o número da opção desejada ou use os comandos:
 • *!ping* - Verificar status do bot
 • *!ajuda* ou *menu* - Ver este menu
-• *!info* - Informações do grupo
-• *!todos* - Mencionar todos os membros`;
+• *!info* - Informações do grupo;
 }
 
 async function enviarBoasVindas(sock, grupoId, participante) {
@@ -79,13 +78,34 @@ async function tratarMensagemLavanderia(sock, msg) {
       return;
     }
 
-    // Opção 2 - Info Lavadora
     if (texto === "2") {
-      await sock.sendMessage(grupoId, {
-        text: "🧾 *Informações da Lavadora*\nElectrolux 8,5Kg LT09E\nConsumo: 112L / 0,25kWh por ciclo\nVelocidade: 660 rpm\nTensão: 220V\nEficiência: A",
-      });
-      return;
-    }
+  const mensagens = [
+    `🧾 *Informações da Lavadora*\nElectrolux 8,5Kg LT09E\n\n*Especificações*\nCapacidade: 3-10 kg\nConsumo de energia: 0,26 KWh/ciclo\nSistema de lavagem: Agitação\nTipo de abertura: Superior\nPlugue: 10A\nQuantidade de níveis de roupa: 4`,
+    
+    `*Este Produto inclui*\nÁgua quente: Não\nCesto: Polipropileno\nDispenser para alvejante: Sim\nDispenser para amaciante: Sim\nDispenser para sabão em pó: Sim\nFiltro elimina fiapos: Sim\nInterior de aço inox: Não\nPainel digital: Não\nPainel mecânico: Sim`,
+    
+    `*Programas de lavagem*\n12 programas\nSistema de lavagem: Agitação\nVisualizador de etapas de lavagem: Sim\nDispenser para sabão líquido: Sim\nTipo de abertura: Superior\nMaterial do cesto: Polipropileno\nMotor direct drive: Não\nFunção lava tênis: Sim\nPrograma preferido: Não`,
+    
+    `Sensor automático de carga de roupas: Não\nReaproveitamento de água: Sim\nEsterilização: Não\nFunção passa fácil: Não\nPré-lavagem: Não\nPés niveladores: Sim\nControle de temperatura: Não\nSilenciosa: Sim\nAlças laterais: Não`,
+    
+    `*Funções*\nTurbo Agitação\nTurbo Secagem\nReutilização de Água\nAvança Etapas\nPerfect dilution\nCiclos rápidos: 19 min\nPainel: Mecânico\nProgramas: Pesado/jeans, Tira manchas, Limpeza de cesto, Rápido, Tênis, Edredom, Escuras, Coloridas, Brancas, Cama & banho, Delicado, Normal`,
+    
+    `*Etapas de lavagem*\nMolho longo, Molho normal, Molho curto, Enxágue, Centrifugação\nProgramas disponíveis: Rápido, Tênis, Edredom, Brancas, Cama & banho, Normal, Super silencioso: Não, Pesado/intenso, Delicado/fitness: Não\nJatos poderosos: Não\nVapor: Não\nControle de molho: Sim`,
+    
+    `Molho: Sim\nReutilizar água: Sim\nTurbo lavagem: Sim\nCiclo silencioso: Não\nWifi: Não\nIniciar/pausar: Não\nQuantidade de níveis de roupa: 4\nTamanho do edredom: Solteiro`,
+    
+    `*Especificações técnicas*\nInstalação gratuita: Não\nConteúdo da embalagem: 1 máquina de lavar, 1 guia rápido, 1 curva da mangueira\nGarantia do produto: 1 ano\nEAN-13: 7896584070767 / 7896584070774\nTensão: 127 ou 220V\nCor: Branco`,
+    
+    `Altura do produto embalado: 105,5 cm\nCapacidade de lavagem: 8,5 kg\nLargura do produto embalado: 57,4 cm\nProfundidade do produto embalado: 63 cm\nEcoPlus: Não\nPeso do produto embalado: 34,3 kg`
+  ];
+
+  for (let i = 0; i < mensagens.length; i++) {
+    await sock.sendMessage(grupoId, { text: mensagens[i] });
+    if (i < mensagens.length - 1) await new Promise(res => setTimeout(res, 20000)); // espera 20s
+  }
+  return;
+}
+
 
     // Opção 3 - Iniciar lavagem
     if (texto === "3" || texto.includes("iniciar")) {
