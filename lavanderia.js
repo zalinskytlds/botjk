@@ -303,7 +303,7 @@ async function tratarMensagemLavanderia(sock, msg) {
       for (const mensagem of mensagens) {
         await sock.sendMessage(grupoId, { text: mensagem });
         // mantém comportamento original: delay entre blocos para evitar flood
-        await new Promise((res) => setTimeout(res, 20000));
+        await new Promise((res) => setTimeout(res, 10000));
       }
       return;
     }
