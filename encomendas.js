@@ -2,7 +2,7 @@ const axios = require("axios");
 const moment = require("moment-timezone");
 
 // URLs da SheetDB
-const URL_SHEETDB_ENCOMENDAS = process.env.SHEETDB_ENCOMENDAS || "https://script.google.com/macros/s/AKfycbzBKHN0yIkO85Kh3QxkjGsSUzpmBjs2fqmovZoUPWMDUrjRl5uTE3UtXX6zcLmyktX3Jw/exec";
+const URL_SHEETDB_ENCOMENDAS = process.env.SHEETDB_ENCOMENDAS || "https://script.google.com/macros/s/AKfycbyd_nqucooE5FKDQvvLP0IPjD8ndv8IEZV_fZkXb2xQk-xt6cw0xj0Fj0KdlHilvVUl/exec";
 const URL_SHEETDB_HISTORICO = process.env.SHEETDB_HISTORICO || "https://script.google.com/macros/s/AKfycbwj1pd6zqZFqqDgPqleEAT6ctgUAZCsbMKoXjEdR1OPd9DY6kxL3rDmjYweda7ur_So/exec";
 const URL_SHEETDB_LOG = process.env.SHEETDB_LOG || "https://script.google.com/macros/s/AKfycbyGlZrTV048EKeqsj290mj1IZitDMcfUGbjgatVjzT_-hxlowoo1l8yj_WZog3pI_Bo/exec";
 
