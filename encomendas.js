@@ -30,8 +30,9 @@ function obterMenuEncomendas() {
 Digite o número da opção desejada ou use os comandos:
 • *!ping* - Verificar status do bot
 • *!ajuda* ou *menu* - Ver este menu
-• *!info* - Informações do grupo;
+• *!info* - Informações do grupo`;
 }
+
 
 /**
  * Registra uma nova encomenda no SheetDB
