@@ -32,7 +32,7 @@ function obterMenuLavanderia() {
 Digite o número da opção desejada ou use os comandos:
 • *!ping* - Verificar status do bot
 • *!ajuda* ou *menu* - Ver este menu
-• *!info* - Informações do grupo;
+• *!info* - Informações do grupo;`;
 }
 
 async function enviarBoasVindas(sock, grupoId, participante) {
@@ -60,54 +60,55 @@ Digite *menu* para ver todas as opções disponíveis.`;
 }
 
 async function tratarMensagemLavanderia(sock, msg) {
-  const grupoId = msg.key.remoteJid;
-  const remetente = msg.key.participant || msg.key.remoteJid;
-  const numero = remetente.split("@")[0];
-  const texto = (
-    msg.message?.conversation ||
-    msg.message?.extendedTextMessage?.text ||
-    ""
-  ).trim().toLowerCase();
-
-  console.log(`🧺 [LAVANDERIA] Mensagem de @${numero}: ${texto}`);
-
   try {
+    const grupoId = msg.key.remoteJid;
+    const remetente = msg.key.participant || msg.key.remoteJid;
+    const numero = remetente.split("@")[0];
+    const texto = (
+      msg.message?.conversation ||
+      msg.message?.extendedTextMessage?.text ||
+      ""
+    ).trim().toLowerCase();
+
+    console.log(`🧺 [LAVANDERIA] Mensagem de @${numero}: ${texto}`);
+
+    // ----------------------
     // Menu
     if (texto === "menu" || texto === "!ajuda") {
       await sock.sendMessage(grupoId, { text: obterMenuLavanderia() });
       return;
     }
 
-    if (texto === "2") {
+    // ----------------------
+    // ----------------------
+// Opção 2 - Info Lavadora (otimizada)
+if (texto === "2") {
   const mensagens = [
     `🧾 *Informações da Lavadora*\nElectrolux 8,5Kg LT09E\n\n*Especificações*\nCapacidade: 3-10 kg\nConsumo de energia: 0,26 KWh/ciclo\nSistema de lavagem: Agitação\nTipo de abertura: Superior\nPlugue: 10A\nQuantidade de níveis de roupa: 4`,
-    
     `*Este Produto inclui*\nÁgua quente: Não\nCesto: Polipropileno\nDispenser para alvejante: Sim\nDispenser para amaciante: Sim\nDispenser para sabão em pó: Sim\nFiltro elimina fiapos: Sim\nInterior de aço inox: Não\nPainel digital: Não\nPainel mecânico: Sim`,
-    
     `*Programas de lavagem*\n12 programas\nSistema de lavagem: Agitação\nVisualizador de etapas de lavagem: Sim\nDispenser para sabão líquido: Sim\nTipo de abertura: Superior\nMaterial do cesto: Polipropileno\nMotor direct drive: Não\nFunção lava tênis: Sim\nPrograma preferido: Não`,
-    
     `Sensor automático de carga de roupas: Não\nReaproveitamento de água: Sim\nEsterilização: Não\nFunção passa fácil: Não\nPré-lavagem: Não\nPés niveladores: Sim\nControle de temperatura: Não\nSilenciosa: Sim\nAlças laterais: Não`,
-    
     `*Funções*\nTurbo Agitação\nTurbo Secagem\nReutilização de Água\nAvança Etapas\nPerfect dilution\nCiclos rápidos: 19 min\nPainel: Mecânico\nProgramas: Pesado/jeans, Tira manchas, Limpeza de cesto, Rápido, Tênis, Edredom, Escuras, Coloridas, Brancas, Cama & banho, Delicado, Normal`,
-    
     `*Etapas de lavagem*\nMolho longo, Molho normal, Molho curto, Enxágue, Centrifugação\nProgramas disponíveis: Rápido, Tênis, Edredom, Brancas, Cama & banho, Normal, Super silencioso: Não, Pesado/intenso, Delicado/fitness: Não\nJatos poderosos: Não\nVapor: Não\nControle de molho: Sim`,
-    
     `Molho: Sim\nReutilizar água: Sim\nTurbo lavagem: Sim\nCiclo silencioso: Não\nWifi: Não\nIniciar/pausar: Não\nQuantidade de níveis de roupa: 4\nTamanho do edredom: Solteiro`,
-    
     `*Especificações técnicas*\nInstalação gratuita: Não\nConteúdo da embalagem: 1 máquina de lavar, 1 guia rápido, 1 curva da mangueira\nGarantia do produto: 1 ano\nEAN-13: 7896584070767 / 7896584070774\nTensão: 127 ou 220V\nCor: Branco`,
-    
     `Altura do produto embalado: 105,5 cm\nCapacidade de lavagem: 8,5 kg\nLargura do produto embalado: 57,4 cm\nProfundidade do produto embalado: 63 cm\nEcoPlus: Não\nPeso do produto embalado: 34,3 kg`
   ];
 
-  for (let i = 0; i < mensagens.length; i++) {
-    await sock.sendMessage(grupoId, { text: mensagens[i] });
-    if (i < mensagens.length - 1) await new Promise(res => setTimeout(res, 20000)); // espera 20s
-  }
+  // Loop assíncrono otimizado
+  (async () => {
+    for (const mensagem of mensagens) {
+      await sock.sendMessage(grupoId, { text: mensagem });
+      await new Promise(res => setTimeout(res, 20000)); // 20s de intervalo
+    }
+  })();
+
   return;
 }
 
 
-    // Opção 3 - Iniciar lavagem
+    // ----------------------
+    // Opção 3 - Iniciar Lavagem
     if (texto === "3" || texto.includes("iniciar")) {
       if (lavagemAtiva) {
         await sock.sendMessage(grupoId, {
@@ -122,12 +123,7 @@ async function tratarMensagemLavanderia(sock, msg) {
       const fim = inicio.clone().add(2, "hours");
       const tempoAvisoAntesDoFim = 10;
 
-      lavagemAtiva = {
-        usuario: numero,
-        jid: remetente,
-        inicio,
-        fim,
-      };
+      lavagemAtiva = { usuario: numero, jid: remetente, inicio, fim };
 
       await sock.sendMessage(grupoId, {
         text: `${saudacao}, @${numero}! 🧺 Sua lavagem foi iniciada às ${formatarHorario(inicio)}.\n⏱️ Término previsto para ${formatarHorario(fim)}.`,
@@ -161,7 +157,8 @@ async function tratarMensagemLavanderia(sock, msg) {
       return;
     }
 
-    // Opção 4 - Finalizar lavagem manual
+    // ----------------------
+    // Opção 4 - Finalizar Lavagem Manual
     if (texto === "4" || texto.includes("finalizar")) {
       if (!lavagemAtiva) {
         await sock.sendMessage(grupoId, { text: "ℹ️ Nenhuma lavagem está ativa no momento." });
@@ -198,7 +195,7 @@ async function tratarMensagemLavanderia(sock, msg) {
         return;
       }
 
-      if (filaDeEspera.find((p) => p.jid === remetente)) {
+      if (filaDeEspera.find(p => p.jid === remetente)) {
         await sock.sendMessage(grupoId, { text: `ℹ️ Você já está na fila, @${numero}!`, mentions: [remetente] });
         return;
       }
@@ -211,9 +208,10 @@ async function tratarMensagemLavanderia(sock, msg) {
       return;
     }
 
+    // ----------------------
     // Opção 6 - Sair da fila
     if (texto === "6" || texto.includes("sair da fila")) {
-      const index = filaDeEspera.findIndex((p) => p.jid === remetente);
+      const index = filaDeEspera.findIndex(p => p.jid === remetente);
       if (index === -1) {
         await sock.sendMessage(grupoId, { text: "ℹ️ Você não está na fila." });
         return;
@@ -224,39 +222,26 @@ async function tratarMensagemLavanderia(sock, msg) {
       return;
     }
 
-     // Opção 7: Sortear Roupas
-if (texto === "7" || texto.includes("sortear")) {
-  const roupas = [
-    "👕 Camiseta",
-    "👖 Calça",
-    "🧦 Meias",
-    "👔 Camisa",
-    "🩳 Shorts",
-    "👗 Vestido",
-    "🩱 Roupa íntima",
-    "👚 Blusa",
-    "👕 Regata",
-    "👖 Legging",
-    "🧤 Luvas",
-    "🧣 Cachecol",
-    "🩲 Cueca",
-    "🩱 Sutiã",
-    "🛏️ Lençol",
-    "🛏️ Fronha",
-    "🧺 Toalha de rosto",
-    "🧼 Toalha de banho",
-    "👕 Pijama"
-  ];
+    // ----------------------
+    // Opção 7 - Sortear roupas
+    if (texto === "7" || texto.includes("sortear")) {
+      const roupas = [
+        "👕 Camiseta", "👖 Calça", "🧦 Meias", "👔 Camisa", "🩳 Shorts",
+        "👗 Vestido", "🩱 Roupa íntima", "👚 Blusa", "👕 Regata", "👖 Legging",
+        "🧤 Luvas", "🧣 Cachecol", "🩲 Cueca", "🩱 Sutiã", "🛏️ Lençol",
+        "🛏️ Fronha", "🧺 Toalha de rosto", "🧼 Toalha de banho", "👕 Pijama"
+      ];
 
-  const sorteada = roupas[Math.floor(Math.random() * roupas.length)];
+      const sorteada = roupas[Math.floor(Math.random() * roupas.length)];
 
-  await sock.sendMessage(grupoId, {
-    text: `🎲 *SORTEIO DE ROUPAS*\n\n@${numero} tirou: ${sorteada}!\n\n😄 Boa sorte na lavagem!`,
-    mentions: [remetente],
-  });
-  return;
-}
+      await sock.sendMessage(grupoId, {
+        text: `🎲 *SORTEIO DE ROUPAS*\n\n@${numero} tirou: ${sorteada}!\n\n😄 Boa sorte na lavagem!`,
+        mentions: [remetente],
+      });
+      return;
+    }
 
+    // ----------------------
     // Opção 8 - Horário de funcionamento
     if (texto === "8" || texto.includes("horário") || texto.includes("horario")) {
       const horarios = `⏰ *HORÁRIO DE FUNCIONAMENTO*\n\n🗓️ Todos os dias: 07:00 - 20:00\n\n⚠️ *Aviso Importante:*\nA *última lavagem deve começar até as 20h* para que seja *finalizada até as 22h*, respeitando o horário de silêncio do condomínio. 🕊️\n\n🔕 Evite usar as máquinas após as 22h, em qualquer dia.`;
@@ -264,6 +249,7 @@ if (texto === "7" || texto.includes("sortear")) {
       return;
     }
 
+    // ----------------------
     // Opção 9 - Previsão do tempo
     if (texto === "9" || texto.includes("previsão") || texto.includes("previsao") || texto.includes("tempo")) {
       try {
@@ -298,10 +284,11 @@ if (texto === "7" || texto.includes("sortear")) {
       return;
     }
 
+    // ----------------------
     // Opção 10 - Coleta de lixo
     if (texto === "10" || texto.includes("lixo") || texto.includes("coleta")) {
       const hoje = moment.tz("America/Sao_Paulo").format("dddd");
-      const coleta = `🗑️ *COLETA DE LIXO*\n\n📅 Hoje é *${hoje}*\n\n♻️ *Lixo Reciclável:* Terça, Quinta e Sábado\n🗑️ *Lixo Orgânico e Comum:* Segunda, Quarta e Sexta\n\n⏰ *Horário:* Deixar o lixo até às 19h na área designada.\n\n🔹 *Orientações importantes:*\n- Separe o lixo *reciclável* (papel, plástico, vidro, metal) do *orgânico* (restos de alimentos, cascas, etc.).\n- Mantenha uma *sacola separada apenas para recicláveis*, facilitando o trabalho dos catadores.\n- Sempre *amarre bem as sacolas* antes de colocar para fora.\n- Use preferencialmente:\n  🟦 *Sacos azuis* ou *sacolas brancas de supermercado* → para recicláveis\n  ⬛ *Sacos pretos* → para lixo comum e orgânico\n\n🚮 *Importante:*\nCaso os sacos de lixo estejam na *calçada*, o descarte será feito junto com os demais moradores,\npois a coleta ocorre *a cada 2 dias*. Dessa forma, evitamos acúmulo e mantemos o local limpo e organizado.\n\n💚 *Separar e descartar corretamente ajuda o meio ambiente e facilita o trabalho dos catadores!*`;
+      const coleta = `🗑️ *COLETA DE LIXO*\n\n📅 Hoje é *${hoje}*\n\n♻️ *Lixo Reciclável:* Terça, Quinta e Sábado\n🗑️ *Lixo Orgânico e Comum:* Segunda, Quarta e Sexta\n\n⏰ *Horário:* Deixar o lixo até às 19h na área designada.\n\n🔹 *Orientações importantes:*\n- Separe o lixo *reciclável* do *orgânico*.\n- Mantenha uma *sacola separada apenas para recicláveis*.\n- Sempre *amarre bem as sacolas*.\n- Use preferencialmente:\n  🟦 *Sacos azuis* ou *sacolas brancas de supermercado* → para recicláveis\n  ⬛ *Sacos pretos* → para lixo comum e orgânico\n\n🚮 *Importante:*\nCaso os sacos de lixo estejam na *calçada*, o descarte será feito junto com os demais moradores,\npois a coleta ocorre *a cada 2 dias*. Dessa forma, evitamos acúmulo e mantemos o local limpo e organizado.\n\n💚 *Separar e descartar corretamente ajuda o meio ambiente e facilita o trabalho dos catadores!*`;
 
       await sock.sendMessage(grupoId, { text: coleta });
       return;
@@ -309,7 +296,7 @@ if (texto === "7" || texto.includes("sortear")) {
 
   } catch (err) {
     console.error("❌ Erro ao processar mensagem da lavanderia:", err.message);
-    await sock.sendMessage(grupoId, { text: "❌ Ocorreu um erro ao processar seu comando. Tente novamente." });
+    await sock.sendMessage(msg.key.remoteJid, { text: "❌ Ocorreu um erro ao processar seu comando. Tente novamente." });
   }
 }
 
