@@ -204,13 +204,38 @@ async function tratarMensagemLavanderia(sock, msg) {
       return;
     }
 
-    // Opção 7 - Sortear roupas
-    if (texto === "7" || texto.includes("sortear")) {
-      const roupas = ["👕 Camiseta","👖 Calça","🧦 Meias","👔 Camisa","🩳 Shorts","👗 Vestido","🩱 Roupa íntima","👚 Blusa","👕 Regata","👖 Legging","🧤 Luvas","🧣 Cachecol","🩲 Cueca","🩱 Sutiã","🛏️ Lençol","🛏️ Fronha","🧺 Toalha de rosto","🧼 Toalha de banho","👕 Pijama"];
-      const sorteada = roupas[Math.floor(Math.random() * roupas.length)];
-      await sock.sendMessage(grupoId, { text: `🎲 *SORTEIO DE ROUPAS*\n\n@${numero} tirou: ${sorteada}!\n\n😄 Boa sorte na lavagem!`, mentions: [remetente] });
-      return;
-    }
+     // Opção 7: Sortear Roupas
+if (texto === "7" || texto.includes("sortear")) {
+  const roupas = [
+    "👕 Camiseta",
+    "👖 Calça",
+    "🧦 Meias",
+    "👔 Camisa",
+    "🩳 Shorts",
+    "👗 Vestido",
+    "🩱 Roupa íntima",
+    "👚 Blusa",
+    "👕 Regata",
+    "👖 Legging",
+    "🧤 Luvas",
+    "🧣 Cachecol",
+    "🩲 Cueca",
+    "🩱 Sutiã",
+    "🛏️ Lençol",
+    "🛏️ Fronha",
+    "🧺 Toalha de rosto",
+    "🧼 Toalha de banho",
+    "👕 Pijama"
+  ];
+
+  const sorteada = roupas[Math.floor(Math.random() * roupas.length)];
+
+  await sock.sendMessage(grupoId, {
+    text: `🎲 *SORTEIO DE ROUPAS*\n\n@${numero} tirou: ${sorteada}!\n\n😄 Boa sorte na lavagem!`,
+    mentions: [remetente],
+  });
+  return;
+}
 
     // Opção 8 - Horário de funcionamento
     if (texto === "8" || texto.includes("horário") || texto.includes("horario")) {
