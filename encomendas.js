@@ -146,7 +146,7 @@ async function tratarMensagemEncomendas(sock, msg) {
             listaMensagem += `👤 ${nome}\n`;
             encomendas.forEach((enc) => {
               const dataFmt = enc.data || "";
-              listaMensagem += `🆔 ${enc.ID} 🛒 ${enc.local} — ${dataFmt}\n📍 Status: ${enc.status}`;
+              listaMensagem += `🆔 ${enc.ID || enc.id} 🛒 ${enc.local} — ${dataFmt}\n📍 Status: ${enc.status}`;
               if (enc.recebido_por)
                 listaMensagem += `\n📬 Recebido por: ${enc.recebido_por}`;
               listaMensagem += "\n\n";
@@ -180,7 +180,7 @@ async function tratarMensagemEncomendas(sock, msg) {
             let msgHist = "📜 Histórico de Encomendas:\n\n";
             bloco.forEach((e) => {
               const dataRegistro = e.dataRegistro || e.dataHora || "";
-              msgHist += `🆔 ${e.ID} 🛒 ${e.local}\n👤 ${e.usuario}\n📍 Status: ${e.status}`;
+              msgHist += `🆔 ${e.ID || e.id} 🛒 ${e.local}\n👤 ${e.usuario}\n📍 Status: ${e.status}`;
               if (e.recebido_por)
                 msgHist += `\n📬 Recebido por: ${e.recebido_por}`;
               msgHist += `\n📅 Data: ${dataRegistro}\n\n`;
@@ -209,10 +209,7 @@ async function tratarMensagemEncomendas(sock, msg) {
           return await enviarMensagem(sock, remetente, "Formato inválido. Use dia/mês/ano.");
         let [dia, mes, ano] = partes.map((p) => parseInt(p, 10));
         if (ano < 100) ano += 2000;
-        estado.data = `${String(dia).padStart(2, "0")}/${String(mes).padStart(
-          2,
-          "0"
-        )}/${ano}`;
+        estado.data = `${String(dia).padStart(2, "0")}/${String(mes).padStart(2, "0")}/${ano}`;
         estado.etapa = "obterLocal";
         await enviarMensagem(sock, remetente, "Onde a compra foi realizada? (Ex: Shopee, Mercado Livre)");
         break;
@@ -223,9 +220,7 @@ async function tratarMensagemEncomendas(sock, msg) {
         const { data: todasRaw } = await axios.get(URL_SHEETDB_ENCOMENDAS);
         const todas = Array.isArray(todasRaw) ? todasRaw : todasRaw.data || [];
 
-        const ids = todas
-          .map((e) => parseInt(e.ID, 10))
-          .filter((i) => !isNaN(i));
+        const ids = todas.map((e) => parseInt(e.ID || e.id, 10)).filter((i) => !isNaN(i));
         const proximoId = (Math.max(0, ...ids) + 1).toString();
 
         await axios.post(URL_SHEETDB_ENCOMENDAS, [
@@ -251,12 +246,18 @@ async function tratarMensagemEncomendas(sock, msg) {
         estado.idConfirmar = textoUsuario;
         const { data: raw } = await axios.get(URL_SHEETDB_ENCOMENDAS);
         const lista = Array.isArray(raw) ? raw : raw.data || [];
-        const encomenda = lista.find((e) => e.ID === estado.idConfirmar);
+
+        // 🔍 Busca a encomenda, agora com ID maiúsculo ou minúsculo
+        const encomenda = lista.find(
+          (e) => String(e.ID || e.id).trim() === String(estado.idConfirmar).trim()
+        );
+
         if (!encomenda || encomenda.status !== "Aguardando Recebimento") {
           await enviarMensagem(sock, remetente, "❌ ID inválido ou encomenda já recebida. Digite 0 para retornar ao menu.");
           delete estadosUsuarios[idSessao];
           return;
         }
+
         estado.encomendaSelecionada = encomenda;
         estado.etapa = "confirmarRecebedor";
         await enviarMensagem(sock, remetente, "✋ Quem está recebendo essa encomenda?");
@@ -267,7 +268,7 @@ async function tratarMensagemEncomendas(sock, msg) {
         const recebidoPor = textoUsuario;
         const enc = estado.encomendaSelecionada;
 
-        await axios.patch(`${URL_SHEETDB_ENCOMENDAS}/ID/${enc.ID}`, {
+        await axios.patch(`${URL_SHEETDB_ENCOMENDAS}/ID/${enc.ID || enc.id}`, {
           status: "Recebida",
           recebido_por: recebidoPor,
         });
