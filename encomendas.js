@@ -71,11 +71,10 @@ async function tratarMensagemEncomendas(sock, msg) {
     if (!msg.message || msg.messageStubType) return;
 
     const remetente = msg.key.remoteJid;
-    const textoUsuario = (
-      msg.message.conversation ||
-      msg.message.extendedTextMessage?.text ||
-      ""
-    ).trim();
+    const textoUsuario =
+      (msg.message.conversation ||
+        msg.message.extendedTextMessage?.text ||
+        "").trim();
     const idSessao = remetente + "_" + (msg.key.participant || "");
     const usuario = msg.pushName || "Desconhecido";
 
@@ -83,7 +82,12 @@ async function tratarMensagemEncomendas(sock, msg) {
     if (!msg.key.fromMe && textoUsuario) {
       try {
         await axios.post(URL_SHEETDB_LOG, [
-          { usuario, mensagem: textoUsuario, origem: "usuário", dataHora: moment().tz("America/Sao_Paulo").format("DD/MM/YYYY HH:mm:ss") },
+          {
+            usuario,
+            mensagem: textoUsuario,
+            origem: "usuário",
+            dataHora: moment().tz("America/Sao_Paulo").format("DD/MM/YYYY HH:mm:ss"),
+          },
         ]);
       } catch (err) {
         console.error("⚠️ Erro ao salvar log do usuário:", err.message);
@@ -108,7 +112,10 @@ async function tratarMensagemEncomendas(sock, msg) {
 
     iniciarTimeout(idSessao);
 
-    if (textoUsuario.toLowerCase() === "menu" || textoUsuario.toLowerCase() === "!ajuda") {
+    if (
+      textoUsuario.toLowerCase() === "menu" ||
+      textoUsuario.toLowerCase() === "!ajuda"
+    ) {
       estadosUsuarios[idSessao] = { etapa: "aguardandoEscolha" };
       await exibirMenu(sock, remetente);
       return;
@@ -125,7 +132,8 @@ async function tratarMensagemEncomendas(sock, msg) {
         } else if (escolha === 2) {
           const { data } = await axios.get(URL_SHEETDB_ENCOMENDAS);
           const lista = Array.isArray(data) ? data : data.data || [];
-          if (!lista.length) return await enviarMensagem(sock, remetente, "📭 Nenhuma encomenda registrada.");
+          if (!lista.length)
+            return await enviarMensagem(sock, remetente, "📭 Nenhuma encomenda registrada.");
 
           const agrupado = {};
           lista.forEach((e) => {
@@ -138,9 +146,12 @@ async function tratarMensagemEncomendas(sock, msg) {
           for (const [nome, encomendas] of Object.entries(agrupado)) {
             listaMensagem += `👤 ${nome}\n`;
             encomendas.forEach((enc) => {
-              const dataFmt = enc.data ? moment(enc.data).tz("America/Sao_Paulo").format("DD/MM/YYYY") : "";
+              const dataFmt = enc.data
+                ? moment(enc.data).tz("America/Sao_Paulo").format("DD/MM/YYYY")
+                : "";
               listaMensagem += `🆔 ${enc.ID} 🛒 ${enc.local} — ${dataFmt}\n📍 Status: ${enc.status}`;
-              if (enc.recebido_por) listaMensagem += `\n📬 Recebido por: ${enc.recebido_por}`;
+              if (enc.recebido_por)
+                listaMensagem += `\n📬 Recebido por: ${enc.recebido_por}`;
               listaMensagem += "\n\n";
             });
           }
@@ -149,47 +160,70 @@ async function tratarMensagemEncomendas(sock, msg) {
           delete estadosUsuarios[idSessao];
         } else if (escolha === 3) {
           estado.etapa = "informarID";
-          await enviarMensagem(sock, remetente, "📦 Qual o ID da encomenda que deseja confirmar?");
+          await enviarMensagem(
+            sock,
+            remetente,
+            "📦 Qual o ID da encomenda que deseja confirmar?"
+          );
         } else if (escolha === 4) {
           const { data: historicoRaw } = await axios.get(URL_SHEETDB_HISTORICO);
-          const historico = Array.isArray(historicoRaw) ? historicoRaw : historicoRaw.data || [];
+          const historico = Array.isArray(historicoRaw)
+            ? historicoRaw
+            : historicoRaw.data || [];
 
-          if (!historico.length) return await enviarMensagem(sock, remetente, "📭 Nenhum registro no histórico.");
+          if (!historico.length)
+            return await enviarMensagem(sock, remetente, "📭 Nenhum registro no histórico.");
 
           const blocos = [];
-          for (let i = 0; i < historico.length; i += 5) blocos.push(historico.slice(i, i + 5));
+          for (let i = 0; i < historico.length; i += 5)
+            blocos.push(historico.slice(i, i + 5));
 
           for (const bloco of blocos) {
             if (!Array.isArray(bloco)) continue;
             let msgHist = "📜 Histórico de Encomendas:\n\n";
             bloco.forEach((e) => {
               const dataRegistro = e.dataRegistro || e.dataHora || "";
-              const dataFmt = dataRegistro ? moment(dataRegistro).tz("America/Sao_Paulo").format("DD/MM/YYYY") : "";
+              const dataFmt = dataRegistro
+                ? moment(dataRegistro).tz("America/Sao_Paulo").format("DD/MM/YYYY")
+                : "";
               msgHist += `🆔 ${e.ID} 🛒 ${e.local}\n👤 ${e.usuario}\n📍 Status: ${e.status}`;
-              if (e.recebido_por) msgHist += `\n📬 Recebido por: ${e.recebido_por}`;
+              if (e.recebido_por)
+                msgHist += `\n📬 Recebido por: ${e.recebido_por}`;
               msgHist += `\n📅 Data: ${dataFmt}\n\n`;
             });
             await enviarMensagem(sock, remetente, msgHist.trim());
           }
           delete estadosUsuarios[idSessao];
         } else {
-          await enviarMensagem(sock, remetente, "❌ Opção inválida. Escolha 1, 2, 3 ou 4.");
+          await enviarMensagem(
+            sock,
+            remetente,
+            "❌ Opção inválida. Escolha 1, 2, 3 ou 4."
+          );
         }
         break;
 
       case "informarID": {
         const idUsuario = parseInt(textoUsuario, 10);
         if (isNaN(idUsuario)) {
-          await enviarMensagem(sock, remetente, "❌ ID inválido. Digite um número ou 0 para voltar ao menu.");
+          await enviarMensagem(
+            sock,
+            remetente,
+            "❌ ID inválido. Digite um número ou 0 para voltar ao menu."
+          );
           return;
         }
 
         const { data: raw } = await axios.get(URL_SHEETDB_ENCOMENDAS);
         const lista = Array.isArray(raw) ? raw : raw.data || [];
 
-        const encomenda = lista.find(e => parseInt(e.ID, 10) === idUsuario);
+        const encomenda = lista.find((e) => parseInt(e.ID, 10) === idUsuario);
         if (!encomenda || encomenda.status !== "Aguardando Recebimento") {
-          await enviarMensagem(sock, remetente, "❌ ID inválido ou encomenda já recebida. Digite Menu para retornar ao menu.");
+          await enviarMensagem(
+            sock,
+            remetente,
+            "❌ ID inválido ou encomenda já recebida. Digite Menu para retornar ao menu."
+          );
           delete estadosUsuarios[idSessao];
           return;
         }
@@ -204,12 +238,17 @@ async function tratarMensagemEncomendas(sock, msg) {
         const recebidoPor = textoUsuario;
         const enc = estado.encomendaSelecionada;
 
-        await axios.patch(`${URL_SHEETDB_ENCOMENDAS}/ID/${enc.ID}`, {
+        // ✅ Corrigido: trocado de PATCH → POST
+        await axios.post(URL_SHEETDB_ENCOMENDAS, {
+          acao: "atualizar",
+          id: enc.ID,
           status: "Recebida",
           recebido_por: recebidoPor,
         });
 
-        const dataFmt = enc.data ? moment(enc.data).tz("America/Sao_Paulo").format("DD/MM/YYYY") : "";
+        const dataFmt = enc.data
+          ? moment(enc.data).tz("America/Sao_Paulo").format("DD/MM/YYYY")
+          : "";
         await enviarMensagem(
           sock,
           remetente,
@@ -220,7 +259,11 @@ async function tratarMensagemEncomendas(sock, msg) {
       }
 
       default:
-        await enviarMensagem(sock, remetente, "⚠️ Algo deu errado. Envie 'Menu' para recomeçar.");
+        await enviarMensagem(
+          sock,
+          remetente,
+          "⚠️ Algo deu errado. Envie 'Menu' para recomeçar."
+        );
         delete estadosUsuarios[idSessao];
     }
   } catch (error) {
