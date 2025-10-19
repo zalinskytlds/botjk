@@ -146,7 +146,7 @@ async function tratarMensagemEncomendas(sock, msg) {
             listaMensagem += `👤 ${nome}\n`;
             encomendas.forEach((enc) => {
               const dataFmt = enc.data || "";
-              listaMensagem += `🆔 ${enc.id} 🛒 ${enc.local} — ${dataFmt}\n📍 Status: ${enc.status}`;
+              listaMensagem += `🆔 ${enc.ID} 🛒 ${enc.local} — ${dataFmt}\n📍 Status: ${enc.status}`;
               if (enc.recebido_por)
                 listaMensagem += `\n📬 Recebido por: ${enc.recebido_por}`;
               listaMensagem += "\n\n";
@@ -180,7 +180,7 @@ async function tratarMensagemEncomendas(sock, msg) {
             let msgHist = "📜 Histórico de Encomendas:\n\n";
             bloco.forEach((e) => {
               const dataRegistro = e.dataRegistro || e.dataHora || "";
-              msgHist += `🆔 ${e.id} 🛒 ${e.local}\n👤 ${e.usuario}\n📍 Status: ${e.status}`;
+              msgHist += `🆔 ${e.ID} 🛒 ${e.local}\n👤 ${e.usuario}\n📍 Status: ${e.status}`;
               if (e.recebido_por)
                 msgHist += `\n📬 Recebido por: ${e.recebido_por}`;
               msgHist += `\n📅 Data: ${dataRegistro}\n\n`;
@@ -224,13 +224,13 @@ async function tratarMensagemEncomendas(sock, msg) {
         const todas = Array.isArray(todasRaw) ? todasRaw : todasRaw.data || [];
 
         const ids = todas
-          .map((e) => parseInt(e.id, 10))
+          .map((e) => parseInt(e.ID, 10))
           .filter((i) => !isNaN(i));
         const proximoId = (Math.max(0, ...ids) + 1).toString();
 
         await axios.post(URL_SHEETDB_ENCOMENDAS, [
           {
-            id: proximoId,
+            ID: proximoId,
             nome: estado.nome,
             data: estado.data,
             local: estado.local,
@@ -251,7 +251,7 @@ async function tratarMensagemEncomendas(sock, msg) {
         estado.idConfirmar = textoUsuario;
         const { data: raw } = await axios.get(URL_SHEETDB_ENCOMENDAS);
         const lista = Array.isArray(raw) ? raw : raw.data || [];
-        const encomenda = lista.find((e) => e.id === estado.idConfirmar);
+        const encomenda = lista.find((e) => e.ID === estado.idConfirmar);
         if (!encomenda || encomenda.status !== "Aguardando Recebimento") {
           await enviarMensagem(sock, remetente, "❌ ID inválido ou encomenda já recebida. Digite 0 para retornar ao menu.");
           delete estadosUsuarios[idSessao];
@@ -267,7 +267,7 @@ async function tratarMensagemEncomendas(sock, msg) {
         const recebidoPor = textoUsuario;
         const enc = estado.encomendaSelecionada;
 
-        await axios.patch(`${URL_SHEETDB_ENCOMENDAS}/id/${enc.id}`, {
+        await axios.patch(`${URL_SHEETDB_ENCOMENDAS}/ID/${enc.ID}`, {
           status: "Recebida",
           recebido_por: recebidoPor,
         });
