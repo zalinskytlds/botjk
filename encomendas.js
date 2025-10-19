@@ -4,7 +4,7 @@ const moment = require("moment-timezone");
 // === URLs das planilhas (Apps Script) ===
 const URL_SHEETDB_ENCOMENDAS =
   process.env.SHEETDB_ENCOMENDAS ||
-  "https://script.google.com/macros/s/AKfycbz7bJ9ZSO_YhYVjLD6yBTxI_U1CTb6OjyEnoB4COtyv0qIAYOdkvDKRaK0Tv58RY-SP/exec";
+  "https://script.google.com/macros/s/AKfycbxd-NvEuxFOaF_u-519ajuPtgzStri31HtC0RZVbzSwNLHEaKkWt8O_i_SZCstw-0ha/exec";
 
 const URL_SHEETDB_HISTORICO =
   process.env.SHEETDB_HISTORICO ||
