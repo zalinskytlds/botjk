@@ -14,8 +14,8 @@ import axios from "axios";
 import QRCode from "qrcode";
 
 // ⚠️ módulos antigos (CommonJS)
-const { tratarMensagemLavanderia } = require("./lavanderia-old.js");
-const { tratarMensagemEncomendas } = require("./encomendas-old.js");
+import { tratarMensagemLavanderia } from "./lavanderia-old.js";
+import { tratarMensagemEncomendas } from "./encomendas-old.js";
 
 // ===============================
 // 🔐 CONFIGURAÇÃO DE AUTENTICAÇÃO
