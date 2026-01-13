@@ -20,7 +20,7 @@ import { tratarMensagemEncomendas } from "./encomendas.js";
 // ===============================
 // 🔐 CONFIGURAÇÕES WEB
 // ===============================
-const WEB_PASSWORD = "jk123"; // 🔒 senha da tela
+const WEB_PASSWORD = "jk123";
 const ARQ_WEB = "web.json";
 
 // ===============================
@@ -30,6 +30,7 @@ let sock;
 let qrCodeAtual = null;
 let codigoPareamento = null;
 let reconectando = false;
+let pareamentoEmAndamento = false;
 
 let usarPareamentoPorNumero = false;
 let numeroPareamento = "";
@@ -59,22 +60,17 @@ function salvarWeb() {
 // ===============================
 if (fs.existsSync(caminhoGrupos)) {
   grupos = JSON.parse(fs.readFileSync(caminhoGrupos, "utf-8"));
-  console.log("✅ Grupos carregados:", grupos);
 } else {
   fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
 }
 
 // ===============================
-// 🚀 INICIAR BOT
+// 🚀 INICIAR BOT (UMA VEZ)
 // ===============================
 async function iniciar() {
-  console.log("🔄 Iniciando bot WhatsApp...");
+  if (sock) return;
 
-  if (sock?.ev) {
-    try {
-      sock.ev.removeAllListeners();
-    } catch {}
-  }
+  console.log("🔄 Iniciando bot WhatsApp...");
 
   const { state, saveCreds } = await useMultiFileAuthState("auth");
   const { version } = await fetchLatestBaileysVersion();
@@ -82,25 +78,29 @@ async function iniciar() {
   sock = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: !usarPareamentoPorNumero,
+    printQRInTerminal: false,
     logger: P({ level: "silent" }),
     browser: ["BotJK", "Chrome", "120.0.0.0"],
   });
 
   sock.ev.on("creds.update", saveCreds);
 
-  // 🔐 CÓDIGO NUMÉRICO
+  // 🔐 PAREAMENTO NUMÉRICO
   if (
     usarPareamentoPorNumero &&
     numeroPareamento &&
-    !state.creds.registered
+    !state.creds.registered &&
+    !pareamentoEmAndamento
   ) {
+    pareamentoEmAndamento = true;
+
     try {
       const codigo = await sock.requestPairingCode(numeroPareamento);
       codigoPareamento = codigo;
       console.log("🔐 Código:", codigo);
     } catch (e) {
       console.error("❌ Erro pareamento:", e.message);
+      pareamentoEmAndamento = false;
     }
   }
 
@@ -128,30 +128,38 @@ async function iniciar() {
     } catch {}
 
     if (grupos.lavanderia.includes(jid))
-      return tratarMensagemLavanderia(sock, msg, jid);
+      tratarMensagemLavanderia(sock, msg, jid);
 
     if (grupos.encomendas.includes(jid))
-      return tratarMensagemEncomendas(sock, msg, jid);
+      tratarMensagemEncomendas(sock, msg, jid);
   });
 
   // 🔌 CONEXÃO
   sock.ev.on("connection.update", async (u) => {
     const { connection, lastDisconnect, qr } = u;
 
-    if (qr) qrCodeAtual = await QRCode.toDataURL(qr);
+    if (qr && !usarPareamentoPorNumero) {
+      qrCodeAtual = await QRCode.toDataURL(qr);
+    }
 
     if (connection === "open") {
       console.log("✅ Bot conectado!");
       qrCodeAtual = null;
       codigoPareamento = null;
+      pareamentoEmAndamento = false;
       reconectando = false;
     }
 
     if (connection === "close") {
+      pareamentoEmAndamento = false;
       const code = lastDisconnect?.error?.output?.statusCode;
+
       if (!reconectando && code !== DisconnectReason.loggedOut) {
         reconectando = true;
-        setTimeout(iniciar, 15000);
+        setTimeout(() => {
+          sock = null;
+          iniciar();
+        }, 15000);
       }
     }
   });
@@ -179,7 +187,7 @@ app.get("/", (req, res) => {
   }
 
   res.send(`
-<!DOCTYPE html>
+<!DOCTYPE hookup>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -196,17 +204,12 @@ input,button{padding:12px;width:100%;border-radius:8px;margin-top:8px}
 <h2>WhatsApp Web</h2>
 
 <form method="POST" action="/numero">
-<input name="numero" value="${numeroPareamento}" placeholder="Ex: 5511999999999" />
-<button>Gerar código</button>
+<input name="numero" value="${numeroPareamento}" placeholder="5511999999999" />
+<button>Usar código numérico</button>
 </form>
 
-${qrCodeAtual ? `<img src="${qrCodeAtual}" />` : ""}
-
-${codigoPareamento ? `<div class="code">${codigoPareamento}</div>` : ""}
-
-<form method="POST" action="/novo">
-<button>🔁 Gerar novo código</button>
-</form>
+${!usarPareamentoPorNumero && qrCodeAtual ? `<img src="${qrCodeAtual}" />` : ""}
+${usarPareamentoPorNumero && codigoPareamento ? `<div class="code">${codigoPareamento}</div>` : ""}
 
 <form method="POST" action="/toggle">
 <button>🔄 Alternar método</button>
@@ -239,16 +242,9 @@ app.post("/logout", (req, res) => {
 app.post("/numero", (req, res) => {
   numeroPareamento = req.body.numero.replace(/\D/g, "");
   webState.ultimoNumero = numeroPareamento;
-  salvarWeb();
   usarPareamentoPorNumero = true;
-  iniciar();
-  res.redirect("/");
-});
-
-app.post("/novo", (req, res) => {
-  qrCodeAtual = null;
   codigoPareamento = null;
-  iniciar();
+  salvarWeb();
   res.redirect("/");
 });
 
@@ -256,7 +252,7 @@ app.post("/toggle", (req, res) => {
   usarPareamentoPorNumero = !usarPareamentoPorNumero;
   qrCodeAtual = null;
   codigoPareamento = null;
-  iniciar();
+  pareamentoEmAndamento = false;
   res.redirect("/");
 });
 
