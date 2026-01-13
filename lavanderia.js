@@ -245,7 +245,7 @@ async function tratarEntradaSaidaGrupo(sock) {
   });
 }
 
-module.exports = {
+exports = {
   tratarMensagemLavanderia,
   tratarEntradaSaidaGrupo,
 };
