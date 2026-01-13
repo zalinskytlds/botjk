@@ -13,29 +13,30 @@ import express from "express";
 import axios from "axios";
 import QRCode from "qrcode";
 
-// ⚠️ módulos antigos (CommonJS)
+// módulos do bot
 import { tratarMensagemLavanderia } from "./lavanderia.js";
 import { tratarMensagemEncomendas } from "./encomendas.js";
 
 // ===============================
-// 🔐 CONFIGURAÇÃO DE AUTENTICAÇÃO
+// 🔐 CONFIG
 // ===============================
 
-// 👉 true = pareamento por número
-// 👉 false = QR Code
-const USAR_PAREAMENTO_POR_NUMERO = true;
+// pode alternar pela web
+let usarPareamentoPorNumero = false;
 
-// ⚠️ número no formato internacional SEM "+"
+// número SEM "+"
 const NUMERO_WHATSAPP_BOT = "19842623829";
 
 // ===============================
 // 🔧 VARIÁVEIS GLOBAIS
 // ===============================
 let sock;
+let qrCodeAtual = null;
+let codigoPareamento = null;
+let reconectando = false;
+
 let grupos = { lavanderia: [], encomendas: [] };
 const caminhoGrupos = "grupos.json";
-let reconectando = false;
-let qrCodeAtual = null;
 
 // ===============================
 // 🧱 CARREGA GRUPOS
@@ -44,12 +45,11 @@ if (fs.existsSync(caminhoGrupos)) {
   grupos = JSON.parse(fs.readFileSync(caminhoGrupos, "utf-8"));
   console.log("✅ Grupos carregados:", grupos);
 } else {
-  console.log("⚠️ grupos.json não encontrado, será criado.");
   fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
 }
 
 // ===============================
-// 🚀 FUNÇÃO PRINCIPAL
+// 🚀 INICIAR BOT
 // ===============================
 async function iniciar() {
   console.log("🔄 Iniciando bot WhatsApp...");
@@ -66,7 +66,7 @@ async function iniciar() {
   sock = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: !USAR_PAREAMENTO_POR_NUMERO,
+    printQRInTerminal: !usarPareamentoPorNumero,
     logger: P({ level: "silent" }),
     browser: ["BotJK", "Chrome", "120.0.0.0"],
   });
@@ -74,21 +74,20 @@ async function iniciar() {
   sock.ev.on("creds.update", saveCreds);
 
   // ===============================
-  // 🔐 PAREAMENTO POR NÚMERO
+  // 🔐 CÓDIGO NUMÉRICO
   // ===============================
-  if (USAR_PAREAMENTO_POR_NUMERO && !state.creds.registered) {
+  if (usarPareamentoPorNumero && !state.creds.registered) {
     try {
       const codigo = await sock.requestPairingCode(NUMERO_WHATSAPP_BOT);
-      console.log("🔐 Código de pareamento:");
-      console.log("👉", codigo);
-      console.log("📱 WhatsApp > Aparelhos conectados > Conectar com número");
-    } catch (err) {
-      console.error("❌ Erro ao gerar código:", err.message);
+      codigoPareamento = codigo;
+      console.log("🔐 Código de pareamento:", codigo);
+    } catch (e) {
+      console.error("❌ Erro pareamento:", e.message);
     }
   }
 
   // ===============================
-  // 📩 LISTENER DE MENSAGENS
+  // 📩 MENSAGENS
   // ===============================
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
@@ -97,120 +96,129 @@ async function iniciar() {
     if (
       !msg?.message ||
       msg.key.fromMe ||
-      msg.message.protocolMessage ||
-      msg.message.reactionMessage ||
       !jid?.endsWith("@g.us")
-    ) {
+    )
       return;
-    }
 
-    // ===============================
-    // 🧠 IDENTIFICA GRUPOS
-    // ===============================
     try {
-      const metadata = await sock.groupMetadata(jid);
-      const nomeGrupo = metadata.subject.toLowerCase();
+      const meta = await sock.groupMetadata(jid);
+      const nome = meta.subject.toLowerCase();
 
-      if (
-        nomeGrupo.includes("lavanderia") &&
-        !grupos.lavanderia.includes(jid)
-      ) {
+      if (nome.includes("lavanderia") && !grupos.lavanderia.includes(jid))
         grupos.lavanderia.push(jid);
-      }
 
       if (
-        (nomeGrupo.includes("jk") || nomeGrupo.includes("encomenda")) &&
+        (nome.includes("jk") || nome.includes("encomenda")) &&
         !grupos.encomendas.includes(jid)
-      ) {
+      )
         grupos.encomendas.push(jid);
-      }
 
       fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
-    } catch (err) {
-      console.log("⚠️ Erro ao ler metadata:", err.message);
-    }
+    } catch {}
 
-    // ===============================
-    // 🧺 LAVANDERIA
-    // ===============================
-    if (grupos.lavanderia.includes(jid)) {
-      await tratarMensagemLavanderia(sock, msg, jid);
-      return;
-    }
+    if (grupos.lavanderia.includes(jid))
+      return tratarMensagemLavanderia(sock, msg, jid);
 
-    // ===============================
-    // 📦 ENCOMENDAS
-    // ===============================
-    if (grupos.encomendas.includes(jid)) {
-      await tratarMensagemEncomendas(sock, msg, jid);
-      return;
-    }
+    if (grupos.encomendas.includes(jid))
+      return tratarMensagemEncomendas(sock, msg, jid);
   });
 
   // ===============================
-  // 🔌 STATUS DA CONEXÃO
+  // 🔌 CONEXÃO
   // ===============================
-  sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
+  sock.ev.on("connection.update", async (u) => {
+    const { connection, lastDisconnect, qr } = u;
 
     if (qr) {
       qrCodeAtual = await QRCode.toDataURL(qr);
-      console.log("📱 QR disponível em /qr");
+    }
+
+    if (connection === "open") {
+      console.log("✅ Bot conectado!");
+      qrCodeAtual = null;
+      codigoPareamento = null;
+      reconectando = false;
     }
 
     if (connection === "close") {
       const code = lastDisconnect?.error?.output?.statusCode;
-
       if (!reconectando && code !== DisconnectReason.loggedOut) {
         reconectando = true;
-        console.log("🔄 Reconectando em 15s...");
         setTimeout(iniciar, 15000);
-      } else {
-        qrCodeAtual = null;
       }
-    }
-
-    if (connection === "open") {
-      reconectando = false;
-      qrCodeAtual = null;
-      console.log("✅ Bot conectado com sucesso!");
     }
   });
 }
 
-// ===============================
-// ▶️ START
-// ===============================
 iniciar();
 
 // ===============================
-// 🌐 EXPRESS (RENDER)
+// 🌐 EXPRESS (TELA WHATSAPP WEB)
 // ===============================
 const app = express();
 
 app.get("/", (req, res) => {
-  res.send("🤖 Bot WhatsApp JK ativo.");
+  res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+<title>Bot JK - WhatsApp</title>
+<style>
+body{font-family:sans-serif;background:#0f172a;color:#fff;text-align:center}
+.card{margin:40px auto;padding:30px;background:#020617;width:340px;border-radius:12px}
+img{width:260px}
+.code{font-size:28px;letter-spacing:6px;margin:20px}
+button{padding:10px 20px;border:none;border-radius:8px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="card">
+<h2>WhatsApp Web</h2>
+
+${
+  qrCodeAtual
+    ? `<img src="${qrCodeAtual}" />`
+    : "<p>QR indisponível</p>"
+}
+
+${
+  codigoPareamento
+    ? `<div class="code">${codigoPareamento}</div>`
+    : "<p>Código indisponível</p>"
+}
+
+<form action="/toggle" method="post">
+<button>Alternar método</button>
+</form>
+
+<p>WhatsApp → Aparelhos conectados</p>
+</div>
+</body>
+</html>
+`);
 });
 
-app.get("/qr", (req, res) => {
-  if (!qrCodeAtual) return res.send("✅ Bot conectado.");
-  res.send(`<img src="${qrCodeAtual}" />`);
+app.post("/toggle", express.urlencoded({ extended: true }), (req, res) => {
+  usarPareamentoPorNumero = !usarPareamentoPorNumero;
+  qrCodeAtual = null;
+  codigoPareamento = null;
+  iniciar();
+  res.redirect("/");
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🌐 HTTP rodando na porta ${PORT}`)
+  console.log("🌐 Web ativa na porta", PORT)
 );
 
 // ===============================
-// ♻️ KEEP ALIVE (Render)
+// ♻️ KEEP ALIVE
 // ===============================
 setInterval(async () => {
   try {
     const url = process.env.RENDER_EXTERNAL_URL
       ? `https://${process.env.RENDER_EXTERNAL_URL}`
       : `http://localhost:${PORT}`;
-
     await axios.get(url);
   } catch {}
 }, 1000 * 60 * 5);
