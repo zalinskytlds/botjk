@@ -239,7 +239,9 @@ async function tratarEntradaSaidaEncomendas(sock) {
   });
 }
 
-module.exports = {
+export {
   tratarMensagemEncomendas,
   tratarEntradaSaidaEncomendas,
 };
+
+
