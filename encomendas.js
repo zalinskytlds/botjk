@@ -1,5 +1,5 @@
-const axios = require("axios");
-const moment = require("moment-timezone");
+import axios from "axios";
+import moment from "moment-timezone";
 
 // ================== CONFIG ==================
 const URL_SHEETDB_ENCOMENDAS =
@@ -239,9 +239,10 @@ async function tratarEntradaSaidaEncomendas(sock) {
   });
 }
 
+/* =========================
+   🔹 EXPORTS (ES MODULES)
+========================= */
 export {
   tratarMensagemEncomendas,
   tratarEntradaSaidaEncomendas,
 };
-
-
