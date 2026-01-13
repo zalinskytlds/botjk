@@ -18,14 +18,10 @@ import { tratarMensagemLavanderia } from "./lavanderia.js";
 import { tratarMensagemEncomendas } from "./encomendas.js";
 
 // ===============================
-// 🔐 CONFIG
+// 🔐 CONFIGURAÇÕES WEB
 // ===============================
-
-// pode alternar pela web
-let usarPareamentoPorNumero = false;
-
-// número SEM "+"
-const NUMERO_WHATSAPP_BOT = "19842623829";
+const WEB_PASSWORD = "jk123"; // 🔒 senha da tela
+const ARQ_WEB = "web.json";
 
 // ===============================
 // 🔧 VARIÁVEIS GLOBAIS
@@ -35,8 +31,28 @@ let qrCodeAtual = null;
 let codigoPareamento = null;
 let reconectando = false;
 
+let usarPareamentoPorNumero = false;
+let numeroPareamento = "";
+
+let webState = {
+  autenticado: false,
+  ultimoNumero: "",
+};
+
 let grupos = { lavanderia: [], encomendas: [] };
 const caminhoGrupos = "grupos.json";
+
+// ===============================
+// 🧱 PERSISTÊNCIA WEB
+// ===============================
+if (fs.existsSync(ARQ_WEB)) {
+  webState = JSON.parse(fs.readFileSync(ARQ_WEB, "utf-8"));
+  numeroPareamento = webState.ultimoNumero || "";
+}
+
+function salvarWeb() {
+  fs.writeFileSync(ARQ_WEB, JSON.stringify(webState, null, 2));
+}
 
 // ===============================
 // 🧱 CARREGA GRUPOS
@@ -73,32 +89,27 @@ async function iniciar() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  // ===============================
   // 🔐 CÓDIGO NUMÉRICO
-  // ===============================
-  if (usarPareamentoPorNumero && !state.creds.registered) {
+  if (
+    usarPareamentoPorNumero &&
+    numeroPareamento &&
+    !state.creds.registered
+  ) {
     try {
-      const codigo = await sock.requestPairingCode(NUMERO_WHATSAPP_BOT);
+      const codigo = await sock.requestPairingCode(numeroPareamento);
       codigoPareamento = codigo;
-      console.log("🔐 Código de pareamento:", codigo);
+      console.log("🔐 Código:", codigo);
     } catch (e) {
       console.error("❌ Erro pareamento:", e.message);
     }
   }
 
-  // ===============================
   // 📩 MENSAGENS
-  // ===============================
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
     const jid = msg?.key?.remoteJid;
 
-    if (
-      !msg?.message ||
-      msg.key.fromMe ||
-      !jid?.endsWith("@g.us")
-    )
-      return;
+    if (!msg?.message || msg.key.fromMe || !jid?.endsWith("@g.us")) return;
 
     try {
       const meta = await sock.groupMetadata(jid);
@@ -123,15 +134,11 @@ async function iniciar() {
       return tratarMensagemEncomendas(sock, msg, jid);
   });
 
-  // ===============================
   // 🔌 CONEXÃO
-  // ===============================
   sock.ev.on("connection.update", async (u) => {
     const { connection, lastDisconnect, qr } = u;
 
-    if (qr) {
-      qrCodeAtual = await QRCode.toDataURL(qr);
-    }
+    if (qr) qrCodeAtual = await QRCode.toDataURL(qr);
 
     if (connection === "open") {
       console.log("✅ Bot conectado!");
@@ -153,52 +160,99 @@ async function iniciar() {
 iniciar();
 
 // ===============================
-// 🌐 EXPRESS (TELA WHATSAPP WEB)
+// 🌐 EXPRESS – TELA WEB
 // ===============================
 const app = express();
+app.use(express.urlencoded({ extended: true }));
 
 app.get("/", (req, res) => {
+  if (!webState.autenticado) {
+    return res.send(`
+    <html><body style="background:#020617;color:white;text-align:center">
+    <h2>🔐 Login</h2>
+    <form method="POST" action="/login">
+    <input name="senha" type="password" placeholder="Senha" />
+    <button>Entrar</button>
+    </form>
+    </body></html>
+    `);
+  }
+
   res.send(`
 <!DOCTYPE html>
 <html>
 <head>
-<title>Bot JK - WhatsApp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:sans-serif;background:#0f172a;color:#fff;text-align:center}
-.card{margin:40px auto;padding:30px;background:#020617;width:340px;border-radius:12px}
-img{width:260px}
-.code{font-size:28px;letter-spacing:6px;margin:20px}
-button{padding:10px 20px;border:none;border-radius:8px;cursor:pointer}
+.card{margin:20px auto;padding:20px;background:#020617;max-width:360px;border-radius:12px}
+img{width:100%}
+.code{font-size:26px;letter-spacing:6px;margin:10px}
+input,button{padding:12px;width:100%;border-radius:8px;margin-top:8px}
 </style>
 </head>
 <body>
 <div class="card">
 <h2>WhatsApp Web</h2>
 
-${
-  qrCodeAtual
-    ? `<img src="${qrCodeAtual}" />`
-    : "<p>QR indisponível</p>"
-}
-
-${
-  codigoPareamento
-    ? `<div class="code">${codigoPareamento}</div>`
-    : "<p>Código indisponível</p>"
-}
-
-<form action="/toggle" method="post">
-<button>Alternar método</button>
+<form method="POST" action="/numero">
+<input name="numero" value="${numeroPareamento}" placeholder="Ex: 5511999999999" />
+<button>Gerar código</button>
 </form>
 
-<p>WhatsApp → Aparelhos conectados</p>
+${qrCodeAtual ? `<img src="${qrCodeAtual}" />` : ""}
+
+${codigoPareamento ? `<div class="code">${codigoPareamento}</div>` : ""}
+
+<form method="POST" action="/novo">
+<button>🔁 Gerar novo código</button>
+</form>
+
+<form method="POST" action="/toggle">
+<button>🔄 Alternar método</button>
+</form>
+
+<form method="POST" action="/logout">
+<button>🚪 Sair</button>
+</form>
+
 </div>
 </body>
 </html>
 `);
 });
 
-app.post("/toggle", express.urlencoded({ extended: true }), (req, res) => {
+app.post("/login", (req, res) => {
+  if (req.body.senha === WEB_PASSWORD) {
+    webState.autenticado = true;
+    salvarWeb();
+  }
+  res.redirect("/");
+});
+
+app.post("/logout", (req, res) => {
+  webState.autenticado = false;
+  salvarWeb();
+  res.redirect("/");
+});
+
+app.post("/numero", (req, res) => {
+  numeroPareamento = req.body.numero.replace(/\D/g, "");
+  webState.ultimoNumero = numeroPareamento;
+  salvarWeb();
+  usarPareamentoPorNumero = true;
+  iniciar();
+  res.redirect("/");
+});
+
+app.post("/novo", (req, res) => {
+  qrCodeAtual = null;
+  codigoPareamento = null;
+  iniciar();
+  res.redirect("/");
+});
+
+app.post("/toggle", (req, res) => {
   usarPareamentoPorNumero = !usarPareamentoPorNumero;
   qrCodeAtual = null;
   codigoPareamento = null;
