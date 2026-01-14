@@ -1,5 +1,5 @@
 // ===============================
-// 📦 IMPORTS (ESM)
+// 📦 IMPORTS
 // ===============================
 import makeWASocket, {
   useMultiFileAuthState,
@@ -10,67 +10,31 @@ import makeWASocket, {
 import P from "pino";
 import fs from "fs";
 import express from "express";
-import axios from "axios";
 import QRCode from "qrcode";
 
-// módulos do bot
-import { tratarMensagemLavanderia } from "./lavanderia.js";
-import { tratarMensagemEncomendas } from "./encomendas.js";
-
 // ===============================
-// 🔐 CONFIGURAÇÕES WEB
+// 🔧 ESTADO GLOBAL
 // ===============================
-const WEB_PASSWORD = "jk123";
-const ARQ_WEB = "web.json";
-
-// ===============================
-// 🔧 VARIÁVEIS GLOBAIS
-// ===============================
-let sock;
+let sock = null;
 let qrCodeAtual = null;
 let codigoPareamento = null;
-let reconectando = false;
-let pareamentoEmAndamento = false;
-
-let usarPareamentoPorNumero = false;
+let metodo = "qr"; // qr | codigo
 let numeroPareamento = "";
-
-let webState = {
-  autenticado: false,
-  ultimoNumero: "",
-};
-
-let grupos = { lavanderia: [], encomendas: [] };
-const caminhoGrupos = "grupos.json";
+let reconectando = false;
 
 // ===============================
-// 🧱 PERSISTÊNCIA WEB
+// 🚀 INICIAR SOCKET
 // ===============================
-if (fs.existsSync(ARQ_WEB)) {
-  webState = JSON.parse(fs.readFileSync(ARQ_WEB, "utf-8"));
-  numeroPareamento = webState.ultimoNumero || "";
-}
+async function iniciarSocket() {
+  if (sock) {
+    try {
+      sock.ev.removeAllListeners();
+      sock.ws.close();
+    } catch {}
+    sock = null;
+  }
 
-function salvarWeb() {
-  fs.writeFileSync(ARQ_WEB, JSON.stringify(webState, null, 2));
-}
-
-// ===============================
-// 🧱 CARREGA GRUPOS
-// ===============================
-if (fs.existsSync(caminhoGrupos)) {
-  grupos = JSON.parse(fs.readFileSync(caminhoGrupos, "utf-8"));
-} else {
-  fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
-}
-
-// ===============================
-// 🚀 INICIAR BOT (UMA VEZ)
-// ===============================
-async function iniciar() {
-  if (sock) return;
-
-  console.log("🔄 Iniciando bot WhatsApp...");
+  console.log("🔄 Iniciando socket:", metodo);
 
   const { state, saveCreds } = await useMultiFileAuthState("auth");
   const { version } = await fetchLatestBaileysVersion();
@@ -78,197 +42,115 @@ async function iniciar() {
   sock = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: false,
     logger: P({ level: "silent" }),
-    browser: ["BotJK", "Chrome", "120.0.0.0"],
+    printQRInTerminal: metodo === "qr",
+    browser: ["BotJK", "Chrome", "120"],
   });
 
   sock.ev.on("creds.update", saveCreds);
 
-  // 🔐 PAREAMENTO NUMÉRICO
-  if (
-    usarPareamentoPorNumero &&
-    numeroPareamento &&
-    !state.creds.registered &&
-    !pareamentoEmAndamento
-  ) {
-    pareamentoEmAndamento = true;
-
-    try {
-      const codigo = await sock.requestPairingCode(numeroPareamento);
-      codigoPareamento = codigo;
-      console.log("🔐 Código:", codigo);
-    } catch (e) {
-      console.error("❌ Erro pareamento:", e.message);
-      pareamentoEmAndamento = false;
-    }
-  }
-
-  // 📩 MENSAGENS
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    const msg = messages[0];
-    const jid = msg?.key?.remoteJid;
-
-    if (!msg?.message || msg.key.fromMe || !jid?.endsWith("@g.us")) return;
-
-    try {
-      const meta = await sock.groupMetadata(jid);
-      const nome = meta.subject.toLowerCase();
-
-      if (nome.includes("lavanderia") && !grupos.lavanderia.includes(jid))
-        grupos.lavanderia.push(jid);
-
-      if (
-        (nome.includes("jk") || nome.includes("encomenda")) &&
-        !grupos.encomendas.includes(jid)
-      )
-        grupos.encomendas.push(jid);
-
-      fs.writeFileSync(caminhoGrupos, JSON.stringify(grupos, null, 2));
-    } catch {}
-
-    if (grupos.lavanderia.includes(jid))
-      tratarMensagemLavanderia(sock, msg, jid);
-
-    if (grupos.encomendas.includes(jid))
-      tratarMensagemEncomendas(sock, msg, jid);
-  });
-
-  // 🔌 CONEXÃO
+  // 🔳 QR CODE
   sock.ev.on("connection.update", async (u) => {
     const { connection, lastDisconnect, qr } = u;
 
-    if (qr && !usarPareamentoPorNumero) {
+    if (qr && metodo === "qr") {
       qrCodeAtual = await QRCode.toDataURL(qr);
+      console.log("📱 QR gerado");
     }
 
     if (connection === "open") {
-      console.log("✅ Bot conectado!");
+      console.log("✅ Conectado!");
       qrCodeAtual = null;
       codigoPareamento = null;
-      pareamentoEmAndamento = false;
       reconectando = false;
     }
 
     if (connection === "close") {
-      pareamentoEmAndamento = false;
       const code = lastDisconnect?.error?.output?.statusCode;
+      console.log("❌ Conexão fechada:", code);
 
       if (!reconectando && code !== DisconnectReason.loggedOut) {
         reconectando = true;
-        setTimeout(() => {
-          sock = null;
-          iniciar();
-        }, 15000);
+        setTimeout(iniciarSocket, 10000);
       }
     }
   });
+
+  // 🔢 CÓDIGO NUMÉRICO
+  if (metodo === "codigo" && numeroPareamento) {
+    setTimeout(async () => {
+      try {
+        const codigo = await sock.requestPairingCode(numeroPareamento);
+        codigoPareamento = codigo;
+        console.log("🔐 Código:", codigo);
+      } catch (e) {
+        console.error("❌ Erro código:", e.message);
+      }
+    }, 2000);
+  }
 }
 
-iniciar();
+iniciarSocket();
 
 // ===============================
-// 🌐 EXPRESS – TELA WEB
+// 🌐 EXPRESS WEB
 // ===============================
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/", (req, res) => {
-  if (!webState.autenticado) {
-    return res.send(`
-    <html><body style="background:#020617;color:white;text-align:center">
-    <h2>🔐 Login</h2>
-    <form method="POST" action="/login">
-    <input name="senha" type="password" placeholder="Senha" />
-    <button>Entrar</button>
-    </form>
-    </body></html>
-    `);
-  }
-
   res.send(`
-<!DOCTYPE hookup>
+<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{font-family:sans-serif;background:#0f172a;color:#fff;text-align:center}
-.card{margin:20px auto;padding:20px;background:#020617;max-width:360px;border-radius:12px}
+body{background:#0f172a;color:white;font-family:sans-serif;text-align:center}
+.card{background:#020617;padding:20px;border-radius:12px;max-width:360px;margin:20px auto}
 img{width:100%}
 .code{font-size:26px;letter-spacing:6px;margin:10px}
-input,button{padding:12px;width:100%;border-radius:8px;margin-top:8px}
+input,button{width:100%;padding:12px;margin-top:8px;border-radius:8px}
 </style>
 </head>
 <body>
 <div class="card">
 <h2>WhatsApp Web</h2>
 
-<form method="POST" action="/numero">
-<input name="numero" value="${numeroPareamento}" placeholder="5511999999999" />
-<button>Usar código numérico</button>
+<form method="POST" action="/codigo">
+<input name="numero" placeholder="5511999999999" />
+<button>Conectar com número</button>
 </form>
 
-${!usarPareamentoPorNumero && qrCodeAtual ? `<img src="${qrCodeAtual}" />` : ""}
-${usarPareamentoPorNumero && codigoPareamento ? `<div class="code">${codigoPareamento}</div>` : ""}
+${metodo === "qr" && qrCodeAtual ? `<img src="${qrCodeAtual}" />` : ""}
+${metodo === "codigo" && codigoPareamento ? `<div class="code">${codigoPareamento}</div>` : ""}
 
-<form method="POST" action="/toggle">
-<button>🔄 Alternar método</button>
+<form method="POST" action="/qr">
+<button>Usar QR Code</button>
 </form>
-
-<form method="POST" action="/logout">
-<button>🚪 Sair</button>
-</form>
-
 </div>
 </body>
 </html>
 `);
 });
 
-app.post("/login", (req, res) => {
-  if (req.body.senha === WEB_PASSWORD) {
-    webState.autenticado = true;
-    salvarWeb();
-  }
-  res.redirect("/");
-});
-
-app.post("/logout", (req, res) => {
-  webState.autenticado = false;
-  salvarWeb();
-  res.redirect("/");
-});
-
-app.post("/numero", (req, res) => {
+app.post("/codigo", (req, res) => {
   numeroPareamento = req.body.numero.replace(/\D/g, "");
-  webState.ultimoNumero = numeroPareamento;
-  usarPareamentoPorNumero = true;
-  codigoPareamento = null;
-  salvarWeb();
-  res.redirect("/");
-});
-
-app.post("/toggle", (req, res) => {
-  usarPareamentoPorNumero = !usarPareamentoPorNumero;
+  metodo = "codigo";
   qrCodeAtual = null;
   codigoPareamento = null;
-  pareamentoEmAndamento = false;
+  iniciarSocket();
+  res.redirect("/");
+});
+
+app.post("/qr", (req, res) => {
+  metodo = "qr";
+  qrCodeAtual = null;
+  codigoPareamento = null;
+  iniciarSocket();
   res.redirect("/");
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, "0.0.0.0", () =>
+app.listen(PORT, () =>
   console.log("🌐 Web ativa na porta", PORT)
 );
-
-// ===============================
-// ♻️ KEEP ALIVE
-// ===============================
-setInterval(async () => {
-  try {
-    const url = process.env.RENDER_EXTERNAL_URL
-      ? `https://${process.env.RENDER_EXTERNAL_URL}`
-      : `http://localhost:${PORT}`;
-    await axios.get(url);
-  } catch {}
-}, 1000 * 60 * 5);
