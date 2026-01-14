@@ -8,24 +8,33 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 
 import P from "pino";
-import fs from "fs";
 import express from "express";
 import QRCode from "qrcode";
+import fs from "fs";
 
 // ===============================
 // 🔧 ESTADO GLOBAL
 // ===============================
 let sock = null;
+let metodo = "qr"; // qr | codigo
 let qrCodeAtual = null;
 let codigoPareamento = null;
-let metodo = "qr"; // qr | codigo
 let numeroPareamento = "";
 let reconectando = false;
+
+// ===============================
+// 📂 SESSÃO POR MÉTODO
+// ===============================
+function pastaAuth() {
+  return metodo === "qr" ? "auth/qr" : "auth/codigo";
+}
 
 // ===============================
 // 🚀 INICIAR SOCKET
 // ===============================
 async function iniciarSocket() {
+  reconectando = false;
+
   if (sock) {
     try {
       sock.ev.removeAllListeners();
@@ -36,20 +45,21 @@ async function iniciarSocket() {
 
   console.log("🔄 Iniciando socket:", metodo);
 
-  const { state, saveCreds } = await useMultiFileAuthState("auth");
+  const { state, saveCreds } = await useMultiFileAuthState(pastaAuth());
   const { version } = await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
     version,
     auth: state,
     logger: P({ level: "silent" }),
-    printQRInTerminal: metodo === "qr",
     browser: ["BotJK", "Chrome", "120"],
   });
 
   sock.ev.on("creds.update", saveCreds);
 
-  // 🔳 QR CODE
+  // ===============================
+  // 🔌 STATUS
+  // ===============================
   sock.ev.on("connection.update", async (u) => {
     const { connection, lastDisconnect, qr } = u;
 
@@ -59,7 +69,7 @@ async function iniciarSocket() {
     }
 
     if (connection === "open") {
-      console.log("✅ Conectado!");
+      console.log("✅ Conectado com sucesso!");
       qrCodeAtual = null;
       codigoPareamento = null;
       reconectando = false;
@@ -69,15 +79,23 @@ async function iniciarSocket() {
       const code = lastDisconnect?.error?.output?.statusCode;
       console.log("❌ Conexão fechada:", code);
 
-      if (!reconectando && code !== DisconnectReason.loggedOut) {
+      // 🚫 NÃO reconecta se logout
+      if (code === DisconnectReason.loggedOut) {
+        console.log("🚪 Sessão inválida, aguardando nova autenticação");
+        return;
+      }
+
+      if (!reconectando) {
         reconectando = true;
         setTimeout(iniciarSocket, 10000);
       }
     }
   });
 
+  // ===============================
   // 🔢 CÓDIGO NUMÉRICO
-  if (metodo === "codigo" && numeroPareamento) {
+  // ===============================
+  if (metodo === "codigo" && numeroPareamento && !state.creds.registered) {
     setTimeout(async () => {
       try {
         const codigo = await sock.requestPairingCode(numeroPareamento);
@@ -93,7 +111,7 @@ async function iniciarSocket() {
 iniciarSocket();
 
 // ===============================
-// 🌐 EXPRESS WEB
+// 🌐 WEB
 // ===============================
 const app = express();
 app.use(express.urlencoded({ extended: true }));
