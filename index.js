@@ -13,6 +13,10 @@ const EVOLUTION_URL = process.env.EVOLUTION_URL;
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE;
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
 
+if (!EVOLUTION_URL || !EVOLUTION_INSTANCE || !EVOLUTION_API_KEY) {
+  console.warn("⚠️ Variáveis de ambiente da Evolution não configuradas!");
+}
+
 /* ===============================
    🧠 ADAPTER (sock fake)
 ================================ */
@@ -21,7 +25,7 @@ const sock = {
     console.log("📤 Enviando mensagem para:", to);
 
     try {
-      // texto simples
+      // Texto simples
       if (typeof content === "string") {
         return axios.post(
           `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
@@ -30,7 +34,7 @@ const sock = {
         );
       }
 
-      // texto normal
+      // Texto normal
       if (content?.text) {
         return axios.post(
           `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
@@ -43,7 +47,7 @@ const sock = {
         );
       }
 
-      // lista interativa
+      // Lista interativa
       if (content?.sections) {
         return axios.post(
           `${EVOLUTION_URL}/message/sendList/${EVOLUTION_INSTANCE}`,
@@ -57,17 +61,22 @@ const sock = {
           { headers: { apikey: EVOLUTION_API_KEY } }
         );
       }
+
+      console.warn("⚠️ Tipo de mensagem não reconhecido:", content);
     } catch (err) {
-      console.error("❌ Erro ao enviar mensagem:", err.response?.data || err.message);
+      console.error(
+        "❌ Erro ao enviar mensagem:",
+        err.response?.data || err.message
+      );
     }
   },
 };
 
 /* ===============================
-   🧪 ROTA TESTE
+   🧪 ROTAS DE TESTE
 ================================ */
 app.get("/", (req, res) => {
-  res.send("BOT ONLINE");
+  res.send("🤖 BOT ONLINE");
 });
 
 app.get("/webhook", (req, res) => {
@@ -83,7 +92,6 @@ app.post("/webhook", async (req, res) => {
   try {
     const payload = req.body;
 
-    // debug
     console.log(JSON.stringify(payload, null, 2));
 
     const data = payload?.data;
@@ -103,18 +111,18 @@ app.post("/webhook", async (req, res) => {
       await tratarMensagemEncomendas(sock, data);
     }
 
-    res.sendStatus(200);
+    return res.sendStatus(200);
   } catch (e) {
     console.error("❌ Erro no webhook:", e);
-    res.sendStatus(200);
+    return res.sendStatus(200);
   }
 });
 
 /* ===============================
    🚀 START SERVER
 ================================ */
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
-  console.log("🚀 Bot rodando na porta", PORT);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Bot rodando na porta ${PORT}`);
 });
