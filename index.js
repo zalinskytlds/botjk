@@ -25,7 +25,6 @@ const sock = {
     console.log("📤 Enviando mensagem para:", to);
 
     try {
-      // Texto simples
       if (typeof content === "string") {
         return axios.post(
           `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
@@ -34,7 +33,6 @@ const sock = {
         );
       }
 
-      // Texto normal
       if (content?.text && !content?.sections) {
         return axios.post(
           `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
@@ -47,7 +45,6 @@ const sock = {
         );
       }
 
-      // Lista interativa
       if (content?.sections) {
         return axios.post(
           `${EVOLUTION_URL}/message/sendList/${EVOLUTION_INSTANCE}`,
@@ -84,22 +81,24 @@ app.get("/webhook", (req, res) => {
 });
 
 /* ===============================
-   🌐 WEBHOOK EVOLUTION
+   🌐 WEBHOOK EVOLUTION (V2 FIX)
 ================================ */
 app.post("/webhook", async (req, res) => {
   console.log("📩 WEBHOOK RECEBIDO");
 
   try {
     const payload = req.body;
-    const data = payload?.data;
 
     console.log("📦 EVENTO:", payload?.event);
+
+    // 🔥 CORREÇÃO PARA EVOLUTION V2
+    const data = payload?.data?.messages?.[0];
 
     if (!data?.key?.remoteJid) {
       return res.sendStatus(200);
     }
 
-    // 🔥 IGNORA MENSAGENS ENVIADAS PELO PRÓPRIO BOT
+    // 🔥 IGNORA MENSAGENS DO PRÓPRIO BOT
     if (data.key.fromMe) {
       console.log("↩️ Ignorando mensagem enviada pelo próprio bot");
       return res.sendStatus(200);
