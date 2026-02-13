@@ -35,7 +35,7 @@ const sock = {
       }
 
       // Texto normal
-      if (content?.text) {
+      if (content?.text && !content?.sections) {
         return axios.post(
           `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
           {
@@ -91,12 +91,17 @@ app.post("/webhook", async (req, res) => {
 
   try {
     const payload = req.body;
-
-    console.log(JSON.stringify(payload, null, 2));
-
     const data = payload?.data;
 
+    console.log("📦 EVENTO:", payload?.event);
+
     if (!data?.key?.remoteJid) {
+      return res.sendStatus(200);
+    }
+
+    // 🔥 IGNORA MENSAGENS ENVIADAS PELO PRÓPRIO BOT
+    if (data.key.fromMe) {
+      console.log("↩️ Ignorando mensagem enviada pelo próprio bot");
       return res.sendStatus(200);
     }
 
@@ -104,6 +109,7 @@ app.post("/webhook", async (req, res) => {
     const isGroup = jid.endsWith("@g.us");
 
     console.log("📨 Mensagem de:", jid);
+    console.log("📄 Conteúdo:", JSON.stringify(data.message, null, 2));
 
     if (isGroup) {
       await tratarMensagemLavanderia(sock, data, jid);
