@@ -83,22 +83,29 @@ app.get("/webhook", (req, res) => {
 /* ===============================
    🌐 WEBHOOK EVOLUTION (V2 FIX)
 ================================ */
-app.post("/webhook", async (req, res) => {
+app.post("/webhook/:event?", async (req, res) => {
+  console.log("\n📩 ===============================");
   console.log("📩 WEBHOOK RECEBIDO");
 
   try {
     const payload = req.body;
+    const event = req.params.event || payload?.event;
 
-    console.log("📦 EVENTO:", payload?.event);
+    console.log("📦 EVENTO:", event);
+    console.log("📦 PAYLOAD:", JSON.stringify(payload, null, 2));
 
-    // 🔥 CORREÇÃO PARA EVOLUTION V2
-    const data = payload?.data?.messages?.[0];
+    // 🔥 Compatível com Evolution v2
+    const data =
+      payload?.data?.messages?.[0] ||
+      payload?.data?.message ||
+      payload?.data;
 
     if (!data?.key?.remoteJid) {
+      console.log("⚠️ Evento sem remoteJid, ignorado");
       return res.sendStatus(200);
     }
 
-    // 🔥 IGNORA MENSAGENS DO PRÓPRIO BOT
+    // 🔥 Ignora mensagens enviadas pelo próprio bot
     if (data.key.fromMe) {
       console.log("↩️ Ignorando mensagem enviada pelo próprio bot");
       return res.sendStatus(200);
@@ -117,6 +124,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     return res.sendStatus(200);
+
   } catch (e) {
     console.error("❌ Erro no webhook:", e);
     return res.sendStatus(200);
