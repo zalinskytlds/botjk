@@ -23,6 +23,8 @@ if (!EVOLUTION_URL || !EVOLUTION_INSTANCE || !EVOLUTION_API_KEY) {
 const sock = {
   async sendMessage(to, content) {
     try {
+      console.log("📤 Enviando mensagem para:", to, "Conteúdo:", content);
+
       if (typeof content === "string") {
         return axios.post(
           `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
@@ -57,7 +59,7 @@ const sock = {
         );
       }
     } catch (err) {
-      console.error("❌ Erro ao enviar:", err.response?.data || err.message);
+      console.error("❌ Erro ao enviar mensagem:", err.response?.data || err.message);
     }
   },
 };
@@ -74,7 +76,7 @@ app.get("/webhook", (req, res) => {
 });
 
 /* ===============================
-   🌐 WEBHOOK EVOLUTION (FIX PRO)
+   🌐 WEBHOOK EVOLUTION REFACTORED
 ================================ */
 app.post("/webhook/:event?", async (req, res) => {
   console.log("\n📩 ===============================");
@@ -83,44 +85,27 @@ app.post("/webhook/:event?", async (req, res) => {
   try {
     const payload = req.body;
 
-    // 🔥 normaliza evento (messages-upsert -> messages.upsert)
-    const event = (req.params.event || payload?.event || "")
-      .replace(/-/g, ".");
-
+    // Normaliza evento
+    const event = (req.params.event || payload?.event || "").replace(/-/g, ".");
     console.log("📦 EVENTO:", event);
 
-    // 🔥 ignora eventos inúteis
-    if (event !== "messages.upsert") {
-      console.log("⏭️ Evento ignorado:", event);
-      return res.sendStatus(200);
-    }
+    // Trata eventos principais
+    switch (event) {
+      case "messages.upsert":
+        await handleMessage(payload);
+        break;
 
-    // 🔥 compat Evolution v2
-    const data =
-      payload?.data?.messages?.[0] ||
-      payload?.data?.message ||
-      payload?.data;
+      case "chats.update":
+        console.log("📝 Evento chats.update recebido:", payload?.data);
+        break;
 
-    if (!data?.key?.remoteJid) {
-      console.log("⚠️ sem remoteJid");
-      return res.sendStatus(200);
-    }
+      case "contacts.update":
+        console.log("📝 Evento contacts.update recebido:", payload?.data);
+        break;
 
-    if (data.key.fromMe) {
-      console.log("↩️ Ignorando mensagem do próprio bot");
-      return res.sendStatus(200);
-    }
-
-    const jid = data.key.remoteJid;
-    const isGroup = jid.endsWith("@g.us");
-
-    console.log("📨 JID:", jid);
-    console.log("📄 MESSAGE:", JSON.stringify(data.message));
-
-    if (isGroup) {
-      await tratarMensagemLavanderia(sock, data, jid);
-    } else {
-      await tratarMensagemEncomendas(sock, data);
+      default:
+        console.log("⏭️ Evento ignorado:", event);
+        break;
     }
 
     return res.sendStatus(200);
@@ -130,6 +115,50 @@ app.post("/webhook/:event?", async (req, res) => {
     return res.sendStatus(200);
   }
 });
+
+/* ===============================
+   🔹 HANDLER DE MENSAGENS
+================================ */
+async function handleMessage(payload) {
+  try {
+    // Compatibilidade Evolution v2
+    const data =
+      payload?.data?.messages?.[0] ||
+      payload?.data?.message ||
+      payload?.data;
+
+    if (!data?.key?.remoteJid) {
+      console.log("⚠️ Sem remoteJid");
+      return;
+    }
+
+    if (data.key.fromMe) {
+      console.log("↩️ Ignorando mensagem do próprio bot");
+      return;
+    }
+
+    const jid = data.key.remoteJid;
+    const isGroup = jid.endsWith("@g.us");
+    const msgContent = data.message || {};
+
+    console.log("📨 JID:", jid);
+    console.log("📄 MESSAGE:", JSON.stringify(msgContent));
+
+    // Processa mensagens
+    if (isGroup) {
+      console.log("🧺 Processando mensagem de grupo...");
+      await tratarMensagemLavanderia(sock, data, jid);
+    } else {
+      console.log("📦 Processando mensagem individual...");
+      await tratarMensagemEncomendas(sock, data);
+    }
+
+    console.log("✅ Mensagem processada com sucesso");
+
+  } catch (err) {
+    console.error("❌ Erro ao processar mensagem:", err);
+  }
+}
 
 /* ===============================
    🚀 START
