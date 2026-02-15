@@ -14,33 +14,19 @@ const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE;
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
 
 if (!EVOLUTION_URL || !EVOLUTION_INSTANCE || !EVOLUTION_API_KEY) {
-  console.warn("⚠️ Variáveis de ambiente da Evolution não configuradas!");
+  console.warn("⚠️ Variáveis da Evolution não configuradas!");
 }
 
 /* ===============================
-   🧠 ADAPTER (sock fake)
+   🧠 ADAPTER SEND MESSAGE
 ================================ */
 const sock = {
   async sendMessage(to, content) {
-    console.log("📤 Enviando mensagem para:", to);
-
     try {
       if (typeof content === "string") {
         return axios.post(
           `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
           { number: to, text: content },
-          { headers: { apikey: EVOLUTION_API_KEY } }
-        );
-      }
-
-      if (content?.text && !content?.sections) {
-        return axios.post(
-          `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
-          {
-            number: to,
-            text: content.text,
-            mentions: content.mentions || [],
-          },
           { headers: { apikey: EVOLUTION_API_KEY } }
         );
       }
@@ -59,18 +45,25 @@ const sock = {
         );
       }
 
-      console.warn("⚠️ Tipo de mensagem não reconhecido:", content);
+      if (content?.text) {
+        return axios.post(
+          `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
+          {
+            number: to,
+            text: content.text,
+            mentions: content.mentions || [],
+          },
+          { headers: { apikey: EVOLUTION_API_KEY } }
+        );
+      }
     } catch (err) {
-      console.error(
-        "❌ Erro ao enviar mensagem:",
-        err.response?.data || err.message
-      );
+      console.error("❌ Erro ao enviar:", err.response?.data || err.message);
     }
   },
 };
 
 /* ===============================
-   🧪 ROTAS DE TESTE
+   🧪 TESTE
 ================================ */
 app.get("/", (req, res) => {
   res.send("🤖 BOT ONLINE");
@@ -81,7 +74,7 @@ app.get("/webhook", (req, res) => {
 });
 
 /* ===============================
-   🌐 WEBHOOK EVOLUTION (V2 FIX)
+   🌐 WEBHOOK EVOLUTION (FIX PRO)
 ================================ */
 app.post("/webhook/:event?", async (req, res) => {
   console.log("\n📩 ===============================");
@@ -89,33 +82,40 @@ app.post("/webhook/:event?", async (req, res) => {
 
   try {
     const payload = req.body;
-    const event = req.params.event || payload?.event;
+
+    // 🔥 normaliza evento (messages-upsert -> messages.upsert)
+    const event = (req.params.event || payload?.event || "")
+      .replace(/-/g, ".");
 
     console.log("📦 EVENTO:", event);
-    console.log("📦 PAYLOAD:", JSON.stringify(payload, null, 2));
 
-    // 🔥 Compatível com Evolution v2
+    // 🔥 ignora eventos inúteis
+    if (event !== "messages.upsert") {
+      console.log("⏭️ Evento ignorado:", event);
+      return res.sendStatus(200);
+    }
+
+    // 🔥 compat Evolution v2
     const data =
       payload?.data?.messages?.[0] ||
       payload?.data?.message ||
       payload?.data;
 
     if (!data?.key?.remoteJid) {
-      console.log("⚠️ Evento sem remoteJid, ignorado");
+      console.log("⚠️ sem remoteJid");
       return res.sendStatus(200);
     }
 
-    // 🔥 Ignora mensagens enviadas pelo próprio bot
     if (data.key.fromMe) {
-      console.log("↩️ Ignorando mensagem enviada pelo próprio bot");
+      console.log("↩️ Ignorando mensagem do próprio bot");
       return res.sendStatus(200);
     }
 
     const jid = data.key.remoteJid;
     const isGroup = jid.endsWith("@g.us");
 
-    console.log("📨 Mensagem de:", jid);
-    console.log("📄 Conteúdo:", JSON.stringify(data.message, null, 2));
+    console.log("📨 JID:", jid);
+    console.log("📄 MESSAGE:", JSON.stringify(data.message));
 
     if (isGroup) {
       await tratarMensagemLavanderia(sock, data, jid);
@@ -125,14 +125,14 @@ app.post("/webhook/:event?", async (req, res) => {
 
     return res.sendStatus(200);
 
-  } catch (e) {
-    console.error("❌ Erro no webhook:", e);
+  } catch (err) {
+    console.error("❌ Erro webhook:", err);
     return res.sendStatus(200);
   }
 });
 
 /* ===============================
-   🚀 START SERVER
+   🚀 START
 ================================ */
 const PORT = process.env.PORT || 3001;
 
