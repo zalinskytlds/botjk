@@ -84,12 +84,9 @@ app.post("/webhook/:event?", async (req, res) => {
 
   try {
     const payload = req.body;
-
-    // Normaliza evento
     const event = (req.params.event || payload?.event || "").replace(/-/g, ".");
     console.log("📦 EVENTO:", event);
 
-    // Trata eventos principais
     switch (event) {
       case "messages.upsert":
         await handleMessage(payload);
@@ -121,7 +118,6 @@ app.post("/webhook/:event?", async (req, res) => {
 ================================ */
 async function handleMessage(payload) {
   try {
-    // Compatibilidade Evolution v2
     const data =
       payload?.data?.messages?.[0] ||
       payload?.data?.message ||
@@ -144,13 +140,31 @@ async function handleMessage(payload) {
     console.log("📨 JID:", jid);
     console.log("📄 MESSAGE:", JSON.stringify(msgContent));
 
-    // Processa mensagens
+    // 🔹 Roteamento por grupo
+    const lavanderiaGroups = [
+      "120363416759586760@g.us",
+      "5551993321922-1558822702@g.us"
+    ];
+
+    const entregasGroups = [
+      "12036248264829284@g.us",
+      "5551993321922-1432213403@g.us"
+    ];
+
     if (isGroup) {
       console.log("🧺 Processando mensagem de grupo...");
-      await tratarMensagemLavanderia(sock, data, jid);
+
+      if (lavanderiaGroups.includes(jid)) {
+        await tratarMensagemLavanderia(sock, data, jid);
+      } else if (entregasGroups.includes(jid)) {
+        await tratarMensagemEncomendas(sock, data, jid);
+      } else {
+        console.log("⚠️ Grupo não configurado para respostas automáticas:", jid);
+      }
+
     } else {
       console.log("📦 Processando mensagem individual...");
-      await tratarMensagemEncomendas(sock, data);
+      await tratarMensagemEncomendas(sock, data, jid);
     }
 
     console.log("✅ Mensagem processada com sucesso");
