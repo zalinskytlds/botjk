@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 const ARQUIVO = path.join(__dirname, "lavanderia.json");
 const TIMEZONE = "America/Sao_Paulo";
 
+// Estado inicial
 let estado = {
   emUso: false,
   usuarioAtual: null,
@@ -16,14 +17,17 @@ let estado = {
   fila: [],
 };
 
+// Carrega estado do arquivo
 if (fs.existsSync(ARQUIVO)) {
   estado = fs.readJsonSync(ARQUIVO);
 }
 
+// Salva estado no arquivo
 function salvar() {
   fs.writeJsonSync(ARQUIVO, estado, { spaces: 2 });
 }
 
+// Pega texto da mensagem com fallback seguro
 function obterTexto(msg) {
   return (
     msg.message?.conversation ||
@@ -39,6 +43,7 @@ function obterTexto(msg) {
 // 📋 MENU
 // ===============================
 async function enviarMenu(sock, grupoId) {
+  console.log("📤 Enviando menu para:", grupoId);
   await sock.sendMessage(grupoId, {
     text: "🧺 *Lavanderia – JK Universitário*",
     footer: "Selecione uma opção",
@@ -69,96 +74,81 @@ async function enviarMenu(sock, grupoId) {
 }
 
 // ===============================
-// 🔹 MAIN
+// 🔹 FLUXO PRINCIPAL
 // ===============================
 async function fluxoLavanderia(sock, msg, grupoId) {
   const texto = obterTexto(msg);
-  const remetente = msg.key.participant || msg.key.remoteJid;
+  const remetente = msg.key?.participant || msg.key?.remoteJid || "usuário";
 
-  if (texto === "menu" || texto === "!ajuda") {
-    return enviarMenu(sock, grupoId);
+  try {
+    switch (texto) {
+      case "menu":
+      case "!ajuda":
+        return enviarMenu(sock, grupoId);
+
+      case "1":
+        return sock.sendMessage(grupoId, "🧼 Separe roupas e não exceda 8kg.");
+
+      case "2":
+        return sock.sendMessage(grupoId, "⚙️ Lavadora 11kg • Tempo médio: 50min");
+
+      case "3":
+        if (estado.emUso) {
+          return sock.sendMessage(
+            grupoId,
+            `⛔ Em uso por @${estado.usuarioAtual?.split("@")[0] || "desconhecido"}`
+          );
+        }
+        estado.emUso = true;
+        estado.usuarioAtual = remetente;
+        estado.inicio = moment().tz(TIMEZONE).format();
+        salvar();
+        return sock.sendMessage(
+          grupoId,
+          `🚿 Lavagem iniciada por @${remetente.split("@")[0]}`
+        );
+
+      case "4":
+        estado.emUso = false;
+        estado.usuarioAtual = null;
+        estado.inicio = null;
+        salvar();
+        return sock.sendMessage(grupoId, "✅ Lavagem finalizada!");
+
+      case "5":
+        if (!estado.fila.includes(remetente)) estado.fila.push(remetente);
+        salvar();
+        return sock.sendMessage(grupoId, `⏳ Você entrou na fila (${estado.fila.length})`);
+
+      case "6":
+        estado.fila = estado.fila.filter((u) => u !== remetente);
+        salvar();
+        return sock.sendMessage(grupoId, "🚶‍♂️ Você saiu da fila.");
+
+      case "7":
+        if (!estado.fila.length) return sock.sendMessage(grupoId, "🎲 Fila vazia.");
+        return sock.sendMessage(grupoId, `🎲 Sorteado: @${estado.fila[0].split("@")[0]}`);
+
+      case "8":
+        return sock.sendMessage(grupoId, "⏰ Funcionamento: 07h às 23h");
+
+      case "9":
+        return sock.sendMessage(grupoId, "🌦️ Consulte a previsão no Climatempo.");
+
+      case "10":
+        return sock.sendMessage(grupoId, "🗑️ Coleta: Seg, Qua e Sex à noite.");
+
+      default:
+        console.log("ℹ️ Mensagem não reconhecida:", texto);
+        return; // Não envia nada
+    }
+  } catch (err) {
+    console.error("❌ Erro no fluxoLavanderia:", err);
   }
-
-  if (texto === "1")
-    return sock.sendMessage(grupoId, "🧼 Separe roupas e não exceda 8kg.");
-
-  if (texto === "2")
-    return sock.sendMessage(
-      grupoId,
-      "⚙️ Lavadora 11kg • Tempo médio: 50min"
-    );
-
-  if (texto === "3") {
-    if (estado.emUso)
-      return sock.sendMessage(
-        grupoId,
-        `⛔ Em uso por @${estado.usuarioAtual.split("@")[0]}`
-      );
-
-    estado.emUso = true;
-    estado.usuarioAtual = remetente;
-    estado.inicio = moment().tz(TIMEZONE).format();
-    salvar();
-
-    return sock.sendMessage(
-      grupoId,
-      `🚿 Lavagem iniciada por @${remetente.split("@")[0]}`
-    );
-  }
-
-  if (texto === "4") {
-    estado.emUso = false;
-    estado.usuarioAtual = null;
-    estado.inicio = null;
-    salvar();
-    return sock.sendMessage(grupoId, "✅ Lavagem finalizada!");
-  }
-
-  if (texto === "5") {
-    if (!estado.fila.includes(remetente)) estado.fila.push(remetente);
-    salvar();
-    return sock.sendMessage(
-      grupoId,
-      `⏳ Você entrou na fila (${estado.fila.length})`
-    );
-  }
-
-  if (texto === "6") {
-    estado.fila = estado.fila.filter((u) => u !== remetente);
-    salvar();
-    return sock.sendMessage(grupoId, "🚶‍♂️ Você saiu da fila.");
-  }
-
-  if (texto === "7") {
-    if (!estado.fila.length)
-      return sock.sendMessage(grupoId, "🎲 Fila vazia.");
-    return sock.sendMessage(
-      grupoId,
-      `🎲 Sorteado: @${estado.fila[0].split("@")[0]}`
-    );
-  }
-
-  if (texto === "8")
-    return sock.sendMessage(
-      grupoId,
-      "⏰ Funcionamento: 07h às 23h"
-    );
-
-  if (texto === "9")
-    return sock.sendMessage(
-      grupoId,
-      "🌦️ Consulte a previsão no Climatempo."
-    );
-
-  if (texto === "10")
-    return sock.sendMessage(
-      grupoId,
-      "🗑️ Coleta: Seg, Qua e Sex à noite."
-    );
 }
 
 // ===============================
-// ✅ EXPORTS COMPATÍVEIS COM INDEX
+// ✅ EXPORTS
 // ===============================
 export async function tratarMensagemLavanderia(sock, msg, grupoId) {
   return fluxoLavanderia(sock, msg, grupoId);
