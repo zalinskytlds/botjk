@@ -1,3 +1,6 @@
+// ===============================
+// index.js - Bot JK
+// ===============================
 import express from "express";
 import axios from "axios";
 import { tratarMensagemLavanderia } from "./lavanderia.js";
@@ -91,22 +94,18 @@ app.post("/webhook/:event?", async (req, res) => {
       case "messages.upsert":
         await handleMessage(payload);
         break;
-
       case "chats.update":
         console.log("📝 Evento chats.update recebido:", payload?.data);
         break;
-
       case "contacts.update":
         console.log("📝 Evento contacts.update recebido:", payload?.data);
         break;
-
       default:
         console.log("⏭️ Evento ignorado:", event);
         break;
     }
 
     return res.sendStatus(200);
-
   } catch (err) {
     console.error("❌ Erro webhook:", err);
     return res.sendStatus(200);
@@ -116,6 +115,17 @@ app.post("/webhook/:event?", async (req, res) => {
 /* ===============================
    🔹 HANDLER DE MENSAGENS
 ================================ */
+const lavanderiaGroups = [
+  "120363416759586760@g.us",
+  "5551993321922-1558822702@g.us",
+  "7838499872908@lid",
+];
+
+const entregasGroups = [
+  "12036248264829284@g.us",
+  "5551993321922-1432213403@g.us",
+];
+
 async function handleMessage(payload) {
   try {
     const data =
@@ -123,52 +133,25 @@ async function handleMessage(payload) {
       payload?.data?.message ||
       payload?.data;
 
-    if (!data?.key?.remoteJid) {
-      console.log("⚠️ Sem remoteJid");
-      return;
-    }
-
-    if (data.key.fromMe) {
-      console.log("↩️ Ignorando mensagem do próprio bot");
-      return;
-    }
+    if (!data?.key?.remoteJid) return;
+    if (data.key.fromMe) return;
 
     const jid = data.key.remoteJid;
-    const isGroup = jid.endsWith("@g.us");
-    const msgContent = data.message || {};
+    const texto = data.message?.conversation || "";
 
-    console.log("📨 JID:", jid);
-    console.log("📄 MESSAGE:", JSON.stringify(msgContent));
+    console.log("📨 Mensagem recebida de:", jid, "Texto:", texto);
 
-    // 🔹 Roteamento por grupo
-    const lavanderiaGroups = [
-      "120363416759586760@g.us",
-      "5551993321922-1558822702@g.us"
-    ];
-
-    const entregasGroups = [
-      "12036248264829284@g.us",
-      "5551993321922-1432213403@g.us"
-    ];
-
-    if (isGroup) {
-      console.log("🧺 Processando mensagem de grupo...");
-
-      if (lavanderiaGroups.includes(jid)) {
-        await tratarMensagemLavanderia(sock, data, jid);
-      } else if (entregasGroups.includes(jid)) {
-        await tratarMensagemEncomendas(sock, data, jid);
-      } else {
-        console.log("⚠️ Grupo não configurado para respostas automáticas:", jid);
-      }
-
+    if (lavanderiaGroups.includes(jid)) {
+      console.log("🧺 Chamando módulo Lavanderia...");
+      await tratarMensagemLavanderia(sock, data, jid);
+    } else if (entregasGroups.includes(jid)) {
+      console.log("📦 Chamando módulo Encomendas...");
+      await tratarMensagemEncomendas(sock, data);
     } else {
-      console.log("📦 Processando mensagem individual...");
-      await tratarMensagemEncomendas(sock, data, jid);
+      console.log("⚠️ Grupo ou contato não configurado:", jid);
     }
 
     console.log("✅ Mensagem processada com sucesso");
-
   } catch (err) {
     console.error("❌ Erro ao processar mensagem:", err);
   }
@@ -178,7 +161,6 @@ async function handleMessage(payload) {
    🚀 START
 ================================ */
 const PORT = process.env.PORT || 3001;
-
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Bot rodando na porta ${PORT}`);
 });
