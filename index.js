@@ -1,5 +1,5 @@
 // ===============================
-// index.js - Bot JK
+// index.js - Bot JK (versão melhorada)
 // ===============================
 import express from "express";
 import axios from "axios";
@@ -9,9 +9,9 @@ import { tratarMensagemEncomendas } from "./encomendas.js";
 const app = express();
 app.use(express.json());
 
-/* ===============================
-   🔌 EVOLUTION CONFIG
-================================ */
+// ===============================
+// 🔌 EVOLUTION CONFIG
+// ===============================
 const EVOLUTION_URL = process.env.EVOLUTION_URL;
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE;
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
@@ -20,18 +20,18 @@ if (!EVOLUTION_URL || !EVOLUTION_INSTANCE || !EVOLUTION_API_KEY) {
   console.warn("⚠️ Variáveis da Evolution não configuradas!");
 }
 
-/* ===============================
-   🧠 ADAPTER SEND MESSAGE
-================================ */
+// ===============================
+// 🧠 ADAPTER SEND MESSAGE
+// ===============================
 const sock = {
   async sendMessage(to, content) {
     try {
       console.log("📤 Enviando mensagem para:", to, "Conteúdo:", content);
 
-      if (typeof content === "string") {
+      if (typeof content === "string" || content?.text) {
         return axios.post(
           `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
-          { number: to, text: content },
+          { number: to, text: typeof content === "string" ? content : content.text },
           { headers: { apikey: EVOLUTION_API_KEY } }
         );
       }
@@ -49,103 +49,90 @@ const sock = {
           { headers: { apikey: EVOLUTION_API_KEY } }
         );
       }
-
-      if (content?.text) {
-        return axios.post(
-          `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
-          {
-            number: to,
-            text: content.text,
-            mentions: content.mentions || [],
-          },
-          { headers: { apikey: EVOLUTION_API_KEY } }
-        );
-      }
     } catch (err) {
       console.error("❌ Erro ao enviar mensagem:", err.response?.data || err.message);
     }
   },
 };
 
-/* ===============================
-   🧪 TESTE
-================================ */
-app.get("/", (req, res) => {
-  res.send("🤖 BOT ONLINE");
-});
+// ===============================
+// 🧪 ROTAS DE TESTE
+// ===============================
+app.get("/", (req, res) => res.send("🤖 BOT ONLINE"));
+app.get("/webhook", (req, res) => res.send("WEBHOOK OK"));
 
-app.get("/webhook", (req, res) => {
-  res.send("WEBHOOK OK");
-});
-
-/* ===============================
-   🌐 WEBHOOK EVOLUTION REFACTORED
-================================ */
+// ===============================
+// 🌐 WEBHOOK EVOLUTION
+// ===============================
 app.post("/webhook/:event?", async (req, res) => {
-  console.log("\n📩 ===============================");
-  console.log("📩 WEBHOOK RECEBIDO");
-
   try {
     const payload = req.body;
     const event = (req.params.event || payload?.event || "").replace(/-/g, ".");
-    console.log("📦 EVENTO:", event);
+    console.log("\n📩 Evento recebido:", event);
 
     switch (event) {
       case "messages.upsert":
         await handleMessage(payload);
         break;
       case "chats.update":
-        console.log("📝 Evento chats.update recebido:", payload?.data);
+        console.log("📝 chats.update:", payload?.data);
         break;
       case "contacts.update":
-        console.log("📝 Evento contacts.update recebido:", payload?.data);
+        console.log("📝 contacts.update:", payload?.data);
         break;
       default:
         console.log("⏭️ Evento ignorado:", event);
-        break;
     }
 
-    return res.sendStatus(200);
+    res.sendStatus(200);
   } catch (err) {
     console.error("❌ Erro webhook:", err);
-    return res.sendStatus(200);
+    res.sendStatus(200);
   }
 });
 
-/* ===============================
-   🔹 HANDLER DE MENSAGENS
-================================ */
-const lavanderiaGroups = [
+// ===============================
+// 🔹 HANDLER UNIFICADO DE MENSAGENS
+// ===============================
+const gruposLavanderia = new Set([
   "120363416759586760@g.us",
   "5551993321922-1558822702@g.us",
   "7838499872908@lid",
-];
+]);
 
-const entregasGroups = [
+const gruposEncomendas = new Set([
   "12036248264829284@g.us",
   "5551993321922-1432213403@g.us",
-];
+]);
 
 async function handleMessage(payload) {
   try {
-    const data =
-      payload?.data?.messages?.[0] ||
-      payload?.data?.message ||
-      payload?.data;
-
-    if (!data?.key?.remoteJid) return;
-    if (data.key.fromMe) return;
+    const data = payload?.data?.messages?.[0] || payload?.data?.message || payload?.data;
+    if (!data?.key?.remoteJid || data.key.fromMe) return;
 
     const jid = data.key.remoteJid;
-    const texto = data.message?.conversation || "";
+    const texto = (data.message?.conversation || "").trim().toLowerCase();
 
-    console.log("📨 Mensagem recebida de:", jid, "Texto:", texto);
+    console.log("📨 Mensagem de:", jid, "| Texto:", texto);
 
-    if (lavanderiaGroups.includes(jid)) {
-      console.log("🧺 Chamando módulo Lavanderia...");
+    // Resposta automática a menu
+    if (["menu", "!ajuda"].includes(texto)) {
+      if (gruposLavanderia.has(jid)) {
+        console.log("🧺 Enviando menu Lavanderia...");
+        await tratarMensagemLavanderia(sock, data, jid);
+        return;
+      }
+      if (gruposEncomendas.has(jid)) {
+        console.log("📦 Enviando menu Encomendas...");
+        await tratarMensagemEncomendas(sock, data);
+        return;
+      }
+    }
+
+    // Redireciona mensagem para o módulo correto
+    if (gruposLavanderia.has(jid)) {
       await tratarMensagemLavanderia(sock, data, jid);
-    } else if (entregasGroups.includes(jid)) {
-      console.log("📦 Chamando módulo Encomendas...");
+    } else if (gruposEncomendas.has(jid)) {
       await tratarMensagemEncomendas(sock, data);
     } else {
       console.log("⚠️ Grupo ou contato não configurado:", jid);
@@ -157,10 +144,8 @@ async function handleMessage(payload) {
   }
 }
 
-/* ===============================
-   🚀 START
-================================ */
+// ===============================
+// 🚀 START SERVER
+// ===============================
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Bot rodando na porta ${PORT}`);
-});
+app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Bot rodando na porta ${PORT}`));
