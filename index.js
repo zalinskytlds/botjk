@@ -1,151 +1,76 @@
-// ===============================
-// index.js - Bot JK (versão melhorada)
-// ===============================
+// ==========================================
+// index.js - BOT JK UNIVERSITÁRIO (SEGURO)
+// ==========================================
+import makeWASocket, { 
+    useMultiFileAuthState, 
+    DisconnectReason, 
+    fetchLatestBaileysVersion 
+} from "@whiskeysockets/baileys";
+import { Boom } from "@hapi/boom";
 import express from "express";
-import axios from "axios";
 import { tratarMensagemLavanderia } from "./lavanderia.js";
 import { tratarMensagemEncomendas } from "./encomendas.js";
 
 const app = express();
-app.use(express.json());
-
-// ===============================
-// 🔌 EVOLUTION CONFIG
-// ===============================
-const EVOLUTION_URL = process.env.EVOLUTION_URL;
-const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE;
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
-
-if (!EVOLUTION_URL || !EVOLUTION_INSTANCE || !EVOLUTION_API_KEY) {
-  console.warn("⚠️ Variáveis da Evolution não configuradas!");
-}
-
-// ===============================
-// 🧠 ADAPTER SEND MESSAGE
-// ===============================
-const sock = {
-  async sendMessage(to, content) {
-    try {
-      console.log("📤 Enviando mensagem para:", to, "Conteúdo:", content);
-
-      if (typeof content === "string" || content?.text) {
-        return axios.post(
-          `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
-          { number: to, text: typeof content === "string" ? content : content.text },
-          { headers: { apikey: EVOLUTION_API_KEY } }
-        );
-      }
-
-      if (content?.sections) {
-        return axios.post(
-          `${EVOLUTION_URL}/message/sendList/${EVOLUTION_INSTANCE}`,
-          {
-            number: to,
-            text: content.text,
-            footer: content.footer,
-            buttonText: content.buttonText,
-            sections: content.sections,
-          },
-          { headers: { apikey: EVOLUTION_API_KEY } }
-        );
-      }
-    } catch (err) {
-      console.error("❌ Erro ao enviar mensagem:", err.response?.data || err.message);
-    }
-  },
-};
-
-// ===============================
-// 🧪 ROTAS DE TESTE
-// ===============================
-app.get("/", (req, res) => res.send("🤖 BOT ONLINE"));
-app.get("/webhook", (req, res) => res.send("WEBHOOK OK"));
-
-// ===============================
-// 🌐 WEBHOOK EVOLUTION
-// ===============================
-app.post("/webhook/:event?", async (req, res) => {
-  try {
-    const payload = req.body;
-    const event = (req.params.event || payload?.event || "").replace(/-/g, ".");
-    console.log("\n📩 Evento recebido:", event);
-
-    switch (event) {
-      case "messages.upsert":
-        await handleMessage(payload);
-        break;
-      case "chats.update":
-        console.log("📝 chats.update:", payload?.data);
-        break;
-      case "contacts.update":
-        console.log("📝 contacts.update:", payload?.data);
-        break;
-      default:
-        console.log("⏭️ Evento ignorado:", event);
-    }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("❌ Erro webhook:", err);
-    res.sendStatus(200);
-  }
-});
-
-// ===============================
-// 🔹 HANDLER UNIFICADO DE MENSAGENS
-// ===============================
-const gruposLavanderia = new Set([
-  "120363416759586760@g.us",
-  "5551993321922-1558822702@g.us",
-  "7838499872908@lid",
-]);
-
-const gruposEncomendas = new Set([
-  "12036248264829284@g.us",
-  "5551993321922-1432213403@g.us",
-]);
-
-async function handleMessage(payload) {
-  try {
-    const data = payload?.data?.messages?.[0] || payload?.data?.message || payload?.data;
-    if (!data?.key?.remoteJid || data.key.fromMe) return;
-
-    const jid = data.key.remoteJid;
-    const texto = (data.message?.conversation || "").trim().toLowerCase();
-
-    console.log("📨 Mensagem de:", jid, "| Texto:", texto);
-
-    // Resposta automática a menu
-    if (["menu", "!ajuda"].includes(texto)) {
-      if (gruposLavanderia.has(jid)) {
-        console.log("🧺 Enviando menu Lavanderia...");
-        await tratarMensagemLavanderia(sock, data, jid);
-        return;
-      }
-      if (gruposEncomendas.has(jid)) {
-        console.log("📦 Enviando menu Encomendas...");
-        await tratarMensagemEncomendas(sock, data);
-        return;
-      }
-    }
-
-    // Redireciona mensagem para o módulo correto
-    if (gruposLavanderia.has(jid)) {
-      await tratarMensagemLavanderia(sock, data, jid);
-    } else if (gruposEncomendas.has(jid)) {
-      await tratarMensagemEncomendas(sock, data);
-    } else {
-      console.log("⚠️ Grupo ou contato não configurado:", jid);
-    }
-
-    console.log("✅ Mensagem processada com sucesso");
-  } catch (err) {
-    console.error("❌ Erro ao processar mensagem:", err);
-  }
-}
-
-// ===============================
-// 🚀 START SERVER
-// ===============================
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Bot rodando na porta ${PORT}`));
+
+// --- CONFIGURAÇÃO DE PRIVACIDADE ---
+// No Render, você vai criar as variáveis: GRUPOS_LAVANDERIA e GRUPOS_ENCOMENDAS
+// separando os IDs por vírgula. Ex: ID1,ID2,ID3
+const gruposLavanderia = new Set(process.env.GRUPOS_LAVANDERIA?.split(",") || []);
+const gruposEncomendas = new Set(process.env.GRUPOS_ENCOMENDAS?.split(",") || []);
+
+app.get("/", (req, res) => res.send("🤖 JK Universitário - Bot Online e Protegido"));
+
+async function conectarWhatsApp() {
+    const { state, saveCreds } = await useMultiFileAuthState("auth_info_jk");
+    const { version } = await fetchLatestBaileysVersion();
+
+    const sock = makeWASocket({
+        version,
+        auth: state,
+        printQRInTerminal: true,
+        browser: ["JK Universitário", "Chrome", "1.0.0"],
+        syncFullHistory: false
+    });
+
+    sock.ev.on("connection.update", (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === "close") {
+            const motivo = new Boom(lastDisconnect?.error)?.output?.statusCode;
+            if (motivo !== DisconnectReason.loggedOut) {
+                conectarWhatsApp();
+            }
+        } else if (connection === "open") {
+            console.log("✅ Conectado! IDs dos grupos carregados via Ambiente.");
+        }
+    });
+
+    sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+        if (type !== "notify") return;
+        const msg = messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const jid = msg.key.remoteJid;
+
+        try {
+            // O bot agora checa se o ID que enviou a mensagem está na sua lista secreta
+            if (gruposLavanderia.has(jid)) {
+                await tratarMensagemLavanderia(sock, msg, jid);
+            } else if (gruposEncomendas.has(jid)) {
+                await tratarMensagemEncomendas(sock, msg);
+            }
+        } catch (err) {
+            console.error("❌ Erro:", err.message);
+        }
+    });
+
+    return sock;
+}
+
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🌐 Servidor rodando na porta ${PORT}`);
+    conectarWhatsApp();
+});
