@@ -1,5 +1,5 @@
 // ==========================================
-// index.js - BOT JK UNIVERSITÁRIO (SEGURO)
+// index.js - JK UNIVERSITÁRIO (QR NA PÁGINA)
 // ==========================================
 import makeWASocket, { 
     useMultiFileAuthState, 
@@ -8,20 +8,63 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import express from "express";
+import QRCode from "qrcode"; // Biblioteca para gerar a imagem do QR
 import { tratarMensagemLavanderia } from "./lavanderia.js";
 import { tratarMensagemEncomendas } from "./encomendas.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// --- CONFIGURAÇÃO DE PRIVACIDADE ---
-// No Render, você vai criar as variáveis: GRUPOS_LAVANDERIA e GRUPOS_ENCOMENDAS
-// separando os IDs por vírgula. Ex: ID1,ID2,ID3
+// Variáveis de Controle
+let ultimoQR = null;
+let statusConexao = "Aguardando inicialização...";
+
+// IDs dos Grupos (Protegidos via Variáveis de Ambiente no Render)
 const gruposLavanderia = new Set(process.env.GRUPOS_LAVANDERIA?.split(",") || []);
 const gruposEncomendas = new Set(process.env.GRUPOS_ENCOMENDAS?.split(",") || []);
 
-app.get("/", (req, res) => res.send("🤖 JK Universitário - Bot Online e Protegido"));
+// --- ROTA DA PÁGINA DE CONEXÃO ---
+app.get("/conectar", async (req, res) => {
+    if (statusConexao === "Conectado") {
+        return res.send(`
+            <div style="text-align:center; font-family:sans-serif; margin-top:50px;">
+                <h1 style="color: green;">✅ WhatsApp Conectado!</h1>
+                <p>O bot do JK Universitário está ativo e operante.</p>
+            </div>
+        `);
+    }
 
+    if (!ultimoQR) {
+        return res.send(`
+            <div style="text-align:center; font-family:sans-serif; margin-top:50px;">
+                <h1>⏳ Gerando QR Code...</h1>
+                <p>Aguarde alguns segundos e atualize a página.</p>
+                <script>setTimeout(() => { location.reload(); }, 5000);</script>
+            </div>
+        `);
+    }
+
+    try {
+        // Converte o código do Baileys em uma imagem Base64
+        const qrImage = await QRCode.toDataURL(ultimoQR);
+        res.send(`
+            <div style="text-align:center; font-family:sans-serif; margin-top:50px;">
+                <h1>🔗 Conectar WhatsApp - JK</h1>
+                <p>Abra o WhatsApp > Aparelhos Conectados > Conectar um Aparelho</p>
+                <img src="${qrImage}" style="border: 15px solid white; box-shadow: 0 0 20px rgba(0,0,0,0.2); margin: 20px;" />
+                <p>Status: <strong>${statusConexao}</strong></p>
+                <script>setTimeout(() => { location.reload(); }, 25000);</script>
+                <p style="font-size: 12px; color: gray;">A página atualiza sozinha a cada 25 segundos.</p>
+            </div>
+        `);
+    } catch (err) {
+        res.status(500).send("Erro ao gerar imagem do QR Code.");
+    }
+});
+
+app.get("/", (req, res) => res.send("🤖 Bot JK Online. Acesse /conectar para o QR Code."));
+
+// --- LÓGICA DO WHATSAPP ---
 async function conectarWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_jk");
     const { version } = await fetchLatestBaileysVersion();
@@ -29,20 +72,32 @@ async function conectarWhatsApp() {
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: true,
-        browser: ["JK Universitário", "Chrome", "1.0.0"],
-        syncFullHistory: false
+        printQRInTerminal: true, // Mantemos no terminal por segurança também
+        browser: ["JK Universitário", "Chrome", "1.0.0"]
     });
 
     sock.ev.on("connection.update", (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+            ultimoQR = qr; // Guarda o QR para mostrar na página
+            statusConexao = "Aguardando leitura do QR Code...";
+        }
+
         if (connection === "close") {
+            ultimoQR = null;
             const motivo = new Boom(lastDisconnect?.error)?.output?.statusCode;
+            statusConexao = "Desconectado. Tentando reconectar...";
+            
             if (motivo !== DisconnectReason.loggedOut) {
                 conectarWhatsApp();
+            } else {
+                statusConexao = "Desconectado pelo usuário. Escaneie novamente.";
             }
         } else if (connection === "open") {
-            console.log("✅ Conectado! IDs dos grupos carregados via Ambiente.");
+            ultimoQR = null;
+            statusConexao = "Conectado";
+            console.log("✅ Conexão aberta com sucesso!");
         }
     });
 
@@ -52,25 +107,22 @@ async function conectarWhatsApp() {
         if (type !== "notify") return;
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
-
         const jid = msg.key.remoteJid;
 
         try {
-            // O bot agora checa se o ID que enviou a mensagem está na sua lista secreta
             if (gruposLavanderia.has(jid)) {
                 await tratarMensagemLavanderia(sock, msg, jid);
             } else if (gruposEncomendas.has(jid)) {
                 await tratarMensagemEncomendas(sock, msg);
             }
         } catch (err) {
-            console.error("❌ Erro:", err.message);
+            console.error("❌ Erro no fluxo:", err.message);
         }
     });
-
-    return sock;
 }
 
+// Inicia o servidor e o bot
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🌐 Servidor rodando na porta ${PORT}`);
+    console.log(`🌐 Servidor na porta ${PORT}`);
     conectarWhatsApp();
 });
