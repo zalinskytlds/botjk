@@ -35,7 +35,7 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
             if (res.data.result === "success") {
                 const donoJid = res.data.dono;
                 return sock.sendMessage(grupoId, { 
-                    text: `✅ Encomenda *ID ${idBuscado}* CHEGOU!\n\n🔔 @${donoJid.split("@")[0]}, sua encomenda está disponível na portaria!`,
+                    text: `✅ Encomenda *ID ${idBuscado}* CHEGOU!\n\n🔔 @${donoJid.split("@")[0]}, procure ver se foi deixada na mesa da churrasqueira na casa do Antônio!`,
                     mentions: [donoJid]
                 });
             } else {
@@ -47,7 +47,7 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
         if (textoLow === "menu" || textoLow === "sair") {
             delete sessoesEncomenda[jid];
             const saudacao = obterSaudacao();
-            const menu = `📦 ${saudacao}!\n\n*ENCOMENDAS JK*\n\n1️⃣ Registrar previsão\n2️⃣ Consultar esperadas\n3️⃣ Confirmar chegada (Baixa)\n4️⃣ Ver Histórico\n\n👉 _Digite o número ou use "ID [número]"_`;
+            const menu = `📦 ${saudacao}!\n\n*ENCOMENDAS JK*\n\n1️⃣ Registrar encomenda\n2️⃣ Consultar encomenda\n3️⃣ Confirmar recebimento\n4️⃣ Ver Histórico\n\n👉 _Digite ID seguido do número (EX: ID 100)"_`;
             return sock.sendMessage(grupoId, { text: menu });
         }
 
@@ -55,12 +55,12 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
         if (sessoesEncomenda[jid]?.etapa === "pergunta_data") {
             sessoesEncomenda[jid].dataPrevista = textoRaw;
             sessoesEncomenda[jid].etapa = "pergunta_loja";
-            return sock.sendMessage(grupoId, { text: "🛍️ De onde é a encomenda? (Ex: Amazon, Shopee):" });
+            return sock.sendMessage(grupoId, { text: "🛍️ De onde é a sua encomenda? (Ex: Amazon, Shopee Mercado Livre Delivery):" });
         }
         if (sessoesEncomenda[jid]?.etapa === "pergunta_loja") {
             sessoesEncomenda[jid].loja = textoRaw;
             sessoesEncomenda[jid].etapa = "pergunta_nome";
-            return sock.sendMessage(grupoId, { text: "👤 Qual o *nome do morador* destinatário?" });
+            return sock.sendMessage(grupoId, { text: "👤 Digite o seu nome" });
         }
         if (sessoesEncomenda[jid]?.etapa === "pergunta_nome") {
             const dados = sessoesEncomenda[jid];
@@ -72,14 +72,14 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
                 usuario: jid 
             });
             delete sessoesEncomenda[jid];
-            return sock.sendMessage(grupoId, { text: `✅ Previsão para *${textoRaw.toUpperCase()}* anotada!` });
+            return sock.sendMessage(grupoId, { text: `✅ Previsão para *${textoRaw.toUpperCase()}* registrada!` });
         }
 
         // --- 4. OPÇÕES DO MENU (SWITCH) ---
         switch (textoLow) {
             case "1":
                 sessoesEncomenda[jid] = { etapa: "pergunta_data" };
-                return sock.sendMessage(grupoId, { text: "📅 Qual a data prevista? (Ex: 25/03)" });
+                return sock.sendMessage(grupoId, { text: "📅 Qual a data aproximada para sua entrega? (Ex: 25/03)" });
 
             case "2":
                 const resCons = await axios.post(URL, { action: "consultar" });
@@ -114,12 +114,25 @@ export function configurarEventosEncomendas(sock) {
         const saudacao = obterSaudacao();
 
         if (num.action === 'add') {
-            const boasVindas = `📦 ${saudacao}! Seja bem-vindo(a) ao grupo de **Encomendas JK** @${participante.split('@')[0]}!\n\nUse este grupo para registrar suas previsões de entrega. Assim, quando sua encomenda chegar, eu te aviso aqui na hora! 🔔`;
+            const boasVindas = `📦 ${saudacao}! Seja bem-vindo(a) à **JK Universitário** @${participante.split('@')[0]}!\n\n` +
+                               `Este é o nosso canal oficial para **Encomendas e Avisos Gerais**. 📢\n\n` +
+                               `• *Encomendas:* Registre suas previsões aqui. Quando chegar e alguém receber, será confirmado por aqui!\n` +
+                               `• *Comunicados:* Fique atento a este grupo para avisos de manutenção, coleta de lixo e informações importantes da pousada.\n\n` +
+                               `Use o comando *Menu* para ver as opções! 🚀`;
+            
             await sock.sendMessage(idGrupo, { text: boasVindas, mentions: [participante] });
+
+            // Envia o log para a planilha (Opcional, mas recomendado)
+            await axios.post(URL, { 
+                action: "log_evento", 
+                usuario: participante, 
+                evento: "ENTROU NO GRUPO" 
+            }).catch(e => console.log("Erro log planilha:", e.message));
+        }
         }
 
         if (num.action === 'remove') {
-            const adeus = `👋 O morador @${participante.split('@')[0]} saiu do grupo de encomendas.`;
+            const adeus = `👋 O morador @${participante.split('@')[0]} saiu do grupo JK Universitário.`;
             await sock.sendMessage(idGrupo, { text: adeus, mentions: [participante] });
         }
     });
