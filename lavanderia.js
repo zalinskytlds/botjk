@@ -1,7 +1,8 @@
 import axios from "axios";
 import moment from "moment-timezone";
 
-const URL_SHEETDB = process.env.SHEETDB_LAVANDERIA;
+// LINK DO GOOGLE APPS SCRIPT (Substitua pela sua URL de execução)
+const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/SUA_URL_AQUI/exec"; 
 const HG_API_KEY = process.env.HGBR_API_KEY; 
 const TIMEZONE = "America/Sao_Paulo";
 
@@ -11,11 +12,11 @@ const DEZ_MINUTOS = 10 * 60 * 1000;
 export async function tratarMensagemLavanderia(sock, msg, grupoId) {
     const texto = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim().toLowerCase();
     const remetente = msg.key?.participant || msg.key?.remoteJid || "";
-    const numeroStr = remetente.split("@")[0];
     const agora = Date.now();
 
     try {
-        const { data } = await axios.get(URL_SHEETDB);
+        // 1. BUSCAR DADOS (O Script do Google deve retornar um JSON com a lista de registros)
+        const { data } = await axios.get(URL_GOOGLE_SCRIPT);
         const registroAtivo = data.find(r => r.status === "em_uso");
         const filaEspera = data.filter(r => r.status === "na_fila");
 
@@ -24,10 +25,11 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
             const fim = parseInt(registroAtivo.fim_previsto);
             if (registroAtivo.aviso_enviado !== "SIM" && (fim - agora) <= DEZ_MINUTOS) {
                 await sock.sendMessage(grupoId, { 
-                    text: `⚠️ @${registroAtivo.usuario.split("@")[0]}, sua lavagem termina em 10 min! Quer estender? Digite *+10* ou *+30*.`,
+                    text: `⚠️ @${registroAtivo.usuario.split("@")[0]}, sua lavagem termina em 10 min!`,
                     mentions: [registroAtivo.usuario]
                 });
-                await axios.patch(`${URL_SHEETDB}/ID/${registroAtivo.ID}`, { aviso_enviado: "SIM" });
+                // Envia comando para marcar aviso como enviado
+                await axios.post(URL_GOOGLE_SCRIPT, { action: "marcarAviso", id: registroAtivo.ID });
             }
         }
 
@@ -39,68 +41,63 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                 return sock.sendMessage(grupoId, { text: menu });
 
             case "1":
-                return sock.sendMessage(grupoId, { text: "🧼 *Dicas:* Não misture panos de prato com roupas íntimas e use sabão na medida certa para não estragar a máquina." });
+                return sock.sendMessage(grupoId, { text: "🧼 *Dica:* Verifique os bolsos! Moedas podem travar a bomba de drenagem da máquina." });
 
             case "2":
-                return sock.sendMessage(grupoId, { text: "⚙️ *Info:* Electrolux 8,5kg. Ideal para cargas médias. Ciclo completo com centrifugação leva aprox. 60 min." });
+                return sock.sendMessage(grupoId, { text: "⚙️ *Info:* Máquina de lavar 8,5kg. Ciclo normal dura cerca de 60 minutos." });
 
             case "3": // INICIAR
-                if (registroAtivo) return sock.sendMessage(grupoId, { text: `⛔ Ocupada por @${registroAtivo.usuario.split("@")[0]}. Termina às ${moment(parseInt(registroAtivo.fim_previsto)).tz(TIMEZONE).format("HH:mm")}`, mentions: [registroAtivo.usuario] });
+                if (registroAtivo) return sock.sendMessage(grupoId, { text: `⛔ Máquina ocupada por @${registroAtivo.usuario.split("@")[0]}`, mentions: [registroAtivo.usuario] });
                 const fimP = agora + DOIS_HORAS;
-                await axios.post(URL_SHEETDB, { ID: Date.now(), usuario: remetente, status: "em_uso", inicio: agora, fim_previsto: fimP, aviso_enviado: "NAO" });
-                return sock.sendMessage(grupoId, { text: `🚿 Lavagem iniciada! Término previsto: *${moment(fimP).tz(TIMEZONE).format("HH:mm")}*` });
+                await axios.post(URL_GOOGLE_SCRIPT, { 
+                    action: "iniciar",
+                    id: Date.now(),
+                    usuario: remetente,
+                    status: "em_uso",
+                    inicio: agora,
+                    fim_previsto: fimP
+                });
+                return sock.sendMessage(grupoId, { text: `🚿 Lavagem iniciada! Término: *${moment(fimP).tz(TIMEZONE).format("HH:mm")}*` });
 
             case "4": // FINALIZAR
-                if (!registroAtivo) return sock.sendMessage(grupoId, { text: "A máquina já está liberada! ✅" });
-                await axios.patch(`${URL_SHEETDB}/ID/${registroAtivo.ID}`, { status: "finalizado" });
-                let avisoFila = "";
-                if (filaEspera.length > 0) {
-                    avisoFila = `\n\n📢 @${filaEspera[0].usuario.split("@")[0]}, a máquina liberou! Sua vez.`;
-                }
+                if (!registroAtivo) return sock.sendMessage(grupoId, { text: "A máquina já está livre! ✅" });
+                await axios.post(URL_GOOGLE_SCRIPT, { action: "finalizar", id: registroAtivo.ID });
+                let avisoFila = filaEspera.length > 0 ? `\n\n📢 @${filaEspera[0].usuario.split("@")[0]}, a máquina liberou!` : "";
                 return sock.sendMessage(grupoId, { text: `✅ Lavagem encerrada!${avisoFila}`, mentions: filaEspera[0] ? [filaEspera[0].usuario] : [] });
 
             case "5": // ENTRAR NA FILA
                 if (filaEspera.some(f => f.usuario === remetente)) return sock.sendMessage(grupoId, { text: "⏳ Você já está na fila!" });
-                await axios.post(URL_SHEETDB, { ID: Date.now(), usuario: remetente, status: "na_fila" });
+                await axios.post(URL_GOOGLE_SCRIPT, { action: "entrarFila", usuario: remetente, id: Date.now() });
                 return sock.sendMessage(grupoId, { text: "⏳ Você entrou na fila de espera!" });
 
             case "6": // SAIR DA FILA
-                const cadastro = filaEspera.find(f => f.usuario === remetente);
-                if (cadastro) {
-                    await axios.delete(`${URL_SHEETDB}/ID/${cadastro.ID}`);
-                    return sock.sendMessage(grupoId, { text: "🚶‍♂️ Você saiu da fila." });
-                }
-                return sock.sendMessage(grupoId, { text: "Você não estava na fila." });
+                await axios.post(URL_GOOGLE_SCRIPT, { action: "sairFila", usuario: remetente });
+                return sock.sendMessage(grupoId, { text: "🚶‍♂️ Você saiu da fila." });
 
-            case "7": // SORTEAR (Exemplo simplificado de peso)
-                const pesoMax = 8.0;
-                let pesoAtual = (Math.random() * (8.0 - 1.0) + 1.0).toFixed(2);
-                return sock.sendMessage(grupoId, { text: `🎲 *Sorteio de Carga:* Sua lavagem de hoje deu aprox. *${pesoAtual}kg*. Está dentro do limite de ${pesoMax}kg! ✅` });
+            case "7": // SORTEAR
+                const peso = (Math.random() * (8.0 - 1.0) + 1.0).toFixed(2);
+                return sock.sendMessage(grupoId, { text: `🎲 *Sorteio:* Sua carga estimada é de *${peso}kg*.` });
 
             case "8":
-                return sock.sendMessage(grupoId, { text: "⏰ *Horário:* Lavanderia JK aberta das 07h às 23h. Evite barulho após as 22h!" });
+                return sock.sendMessage(grupoId, { text: "⏰ *Horário:* Aberto das 07h às 23h." });
 
             case "9": // PREVISÃO DO TEMPO (HG Brasil)
                 try {
-                    // Usando "Viamão" ou "Porto Alegre" conforme sua localização
                     const resClima = await axios.get(`https://api.hgbrasil.com/weather?key=${HG_API_KEY}&city_name=Viamao,RS`);
                     const w = resClima.data.results;
-                    const climaTxt = `🌦️ *Clima em ${w.city}*\n\n🌡️ Temp: ${w.temp}°C\n☁️ Céu: ${w.description}\n💧 Humidade: ${w.humidity}%\n💨 Vento: ${w.wind_speedy}\n\n👉 *Status:* ${w.description.includes("Chuva") ? "Melhor não colocar no varal externo! ⛈️" : "Bom para secar roupa! ☀️"}`;
-                    return sock.sendMessage(grupoId, { text: climaTxt });
-                } catch (e) {
-                    return sock.sendMessage(grupoId, { text: "❌ API de clima fora do ar." });
-                }
+                    return sock.sendMessage(grupoId, { text: `🌦️ *Clima em ${w.city}*\n🌡️ ${w.temp}°C - ${w.description}\n💧 Humidade: ${w.humidity}%` });
+                } catch (e) { return sock.sendMessage(grupoId, { text: "❌ Erro ao consultar clima." }); }
 
             case "10":
-                return sock.sendMessage(grupoId, { text: "🗑️ *Coleta de Lixo:* Seg, Qua e Sex (Noite). Separe o lixo seco do orgânico!" });
+                return sock.sendMessage(grupoId, { text: "🗑️ *Lixo:* Coleta Seg, Qua e Sex (Noite)." });
 
             case "+10":
-            case "+30":
+            case "+30": // ESTENDER TEMPO
                 if (registroAtivo && remetente === registroAtivo.usuario) {
                     const add = parseInt(texto.replace("+", "")) * 60000;
                     const novoFim = parseInt(registroAtivo.fim_previsto) + add;
-                    await axios.patch(`${URL_SHEETDB}/ID/${registroAtivo.ID}`, { fim_previsto: novoFim, aviso_enviado: "NAO" });
-                    return sock.sendMessage(grupoId, { text: `✅ Tempo estendido até ${moment(novoFim).tz(TIMEZONE).format("HH:mm")}` });
+                    await axios.post(URL_GOOGLE_SCRIPT, { action: "estender", id: registroAtivo.ID, novoFim: novoFim });
+                    return sock.sendMessage(grupoId, { text: `✅ Estendido até ${moment(novoFim).tz(TIMEZONE).format("HH:mm")}` });
                 }
                 break;
         }
