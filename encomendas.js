@@ -1,6 +1,5 @@
 import axios from "axios";
 
-// Pega a URL das variáveis de ambiente
 const URL = process.env.URL_GOOGLE_ENCOMENDAS;
 let sessoesEncomenda = {}; 
 
@@ -9,7 +8,6 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
     const texto = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim();
     const textoLow = texto.toLowerCase();
 
-    // Se não houver URL configurada, avisa no log para você saber
     if (!URL) {
         console.error("ERRO: Variável URL_GOOGLE_ENCOMENDAS não definida!");
         return;
@@ -53,7 +51,7 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
         // --- OPÇÃO 2: CONSULTAR ESPERADAS ---
         if (texto === "2") {
             const res = await axios.post(URL, { action: "consultar" });
-            const lista = res.data.lista.map(r => `• ${r[2]} para *${r[3]}* - Previsto: ${r[1]}`).join("\n");
+            const lista = res.data.lista.map(r => `• ID: ${r[0]} - ${r[2]} (*${r[3]}*)`).join("\n");
             return sock.sendMessage(grupoId, { text: lista || "📭 Nenhuma encomenda pendente." });
         }
 
@@ -68,15 +66,43 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
             return sock.sendMessage(grupoId, { text: msgLista });
         }
 
+        // --- OPÇÃO 4: VER HISTÓRICO ---
+        if (texto === "4") {
+            const res = await axios.post(URL, { action: "historico" });
+            if (!res.data.lista || res.data.lista.length === 0) {
+                return sock.sendMessage(grupoId, { text: "📜 O histórico está vazio." });
+            }
+            // Mapeia o histórico: Morador (R[3]), Loja (R[2]), Data Chegada (R[6])
+            const listaHist = res.data.lista.map(r => `✅ *${r[3]}* - ${r[2]} (Entregue em: ${r[6]})`).join("\n");
+            return sock.sendMessage(grupoId, { text: `📜 *ÚLTIMAS ENTREGAS*\n\n${listaHist}` });
+        }
+
         // Lógica para processar o ID da Opção 3
         if (sessoesEncomenda[jid]?.etapa === "pergunta_id") {
-            await axios.post(URL, { action: "receber", id: texto });
+            const res = await axios.post(URL, { 
+                action: "receber", 
+                id: texto,
+                dataChegada: new Date().toLocaleString("pt-BR"),
+                quemRecebeu: "Portaria JK" 
+            });
+
             delete sessoesEncomenda[jid];
-            return sock.sendMessage(grupoId, { text: `✅ Encomenda ${texto} marcada como ENTREGUE!` });
+
+            if (res.data.result === "success") {
+                const donoJid = res.data.dono;
+                const numeroLimpo = donoJid.split("@")[0];
+
+                return sock.sendMessage(grupoId, { 
+                    text: `✅ A encomenda ${texto} CHEGOU!\n\n🔔 Ei @${numeroLimpo}, sua encomenda já está disponível!`,
+                    mentions: [donoJid]
+                });
+            } else {
+                return sock.sendMessage(grupoId, { text: "❌ ID não encontrado na lista de espera." });
+            }
         }
 
     } catch (error) {
         console.error("Erro na comunicação com a planilha:", error.message);
-        return sock.sendMessage(grupoId, { text: "❌ Erro ao conectar com a planilha. Verifique a URL." });
+        return sock.sendMessage(grupoId, { text: "❌ Erro ao conectar com a planilha." });
     }
 }
