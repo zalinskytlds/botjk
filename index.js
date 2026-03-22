@@ -1,4 +1,4 @@
-import 'dotenv/config'; // Garante que GRUPOS_LAVANDERIA seja lido na linha 1
+import 'dotenv/config'; 
 import makeWASocket, { 
     useMultiFileAuthState, 
     DisconnectReason, 
@@ -7,18 +7,17 @@ import makeWASocket, {
 import { Boom } from "@hapi/boom";
 import express from "express";
 import QRCode from "qrcode";
-import pino from "pino"; // ADICIONADO: Necessário para o Baileys
+import pino from "pino"; 
 import { tratarMensagemLavanderia } from "./lavanderia.js";
-// import { tratarMensagemEncomendas } from "./encomendas.js"; 
+import { tratarMensagemEncomendas } from "./encomendas.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Variáveis de Controle
 let ultimoQR = null;
 let statusConexao = "Aguardando inicialização...";
 
-// IDs dos Grupos (Lidos do Render)
+// IDs dos Grupos (Configurados no Render)
 const gruposLavanderia = new Set(process.env.GRUPOS_LAVANDERIA?.split(",") || []);
 const gruposEncomendas = new Set(process.env.GRUPOS_ENCOMENDAS?.split(",") || []);
 
@@ -52,7 +51,6 @@ app.get("/conectar", async (req, res) => {
                 <img src="${qrImage}" style="border: 15px solid white; box-shadow: 0 0 20px rgba(0,0,0,0.2); margin: 20px; width: 300px;" />
                 <p>Status: <strong>${statusConexao}</strong></p>
                 <script>setTimeout(() => { location.reload(); }, 25000);</script>
-                <p style="font-size: 12px; color: gray;">A página atualiza sozinha a cada 25 segundos.</p>
             </div>
         `);
     } catch (err) {
@@ -64,7 +62,6 @@ app.get("/", (req, res) => res.send("🤖 Bot JK Online. Acesse /conectar para o
 
 // --- LÓGICA DO WHATSAPP ---
 async function conectarWhatsApp() {
-    // Pasta de autenticação persistente no Render (lembre-se de usar disco se possível)
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_jk");
     const { version } = await fetchLatestBaileysVersion();
 
@@ -72,7 +69,7 @@ async function conectarWhatsApp() {
         version,
         auth: state,
         printQRInTerminal: true,
-        logger: pino({ level: "silent" }), // Adicionado: Evita erros de log
+        logger: pino({ level: "silent" }), 
         browser: ["JK Universitário", "Chrome", "1.0.0"]
     });
 
@@ -111,22 +108,25 @@ async function conectarWhatsApp() {
         const jid = msg.key.remoteJid;
 
         try {
-            // Verifica se o JID do grupo está na lista de lavanderia
+            // Roteamento para Lavanderia
             if (gruposLavanderia.has(jid)) {
-                console.log(`🧺 Mensagem no grupo de Lavanderia: ${jid}`);
+                console.log(`🧺 Processando Lavanderia no grupo: ${jid}`);
                 await tratarMensagemLavanderia(sock, msg, jid);
             } 
-            // else if (gruposEncomendas.has(jid)) {
-            //    await tratarMensagemEncomendas(sock, msg, jid);
-            // }
+            // Roteamento para Encomendas
+            else if (gruposEncomendas.has(jid)) {
+                console.log(`📦 Processando Encomendas no grupo: ${jid}`);
+                await tratarMensagemEncomendas(sock, msg);
+            }
         } catch (err) {
-            console.error("❌ Erro no processamento da mensagem:", err.message);
+            console.error("❌ Erro no fluxo:", err.message);
         }
     });
 }
 
 // Inicia o servidor e o bot
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🌐 Servidor na porta ${PORT}`);
+    console.log(`🌐 Servidor rodando na porta ${PORT}`);
     conectarWhatsApp();
 });
+        
