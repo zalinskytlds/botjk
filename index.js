@@ -1,9 +1,5 @@
 import 'dotenv/config'; 
-import makeWASocket, { 
-    useMultiFileAuthState, 
-    DisconnectReason, 
-    fetchLatestBaileysVersion 
-} from "@whiskeysockets/baileys";
+import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import express from "express";
 import QRCode from "qrcode";
@@ -13,19 +9,18 @@ import { tratarMensagemEncomendas } from "./encomendas.js";
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-
 let ultimoQR = null;
 let statusConexao = "Iniciando...";
-let sock; // Definir globalmente para facilitar
+let sock;
 
-const gruposLavanderia = new Set(process.env.GRUPOS_LAVANDERIA?.split(",").map(id => id.trim()) || []);
-const gruposEncomendas = new Set(process.env.GRUPOS_ENCOMENDAS?.split(",").map(id => id.trim()) || []);
+// Lógica para transformar a string do Render em uma lista (Set) de IDs
+const obterGrupos = (envVar) => new Set(process.env[envVar]?.split(",").map(id => id.trim()).filter(id => id) || []);
 
 app.get("/", async (req, res) => {
-    if (statusConexao === "Conectado") return res.send("<h1>✅ Conectado!</h1>");
+    if (statusConexao === "Conectado") return res.send("<h1>✅ JK Online!</h1>");
     if (!ultimoQR) return res.send("<h1>⏳ Gerando QR...</h1><script>setTimeout(()=>location.reload(),5000)</script>");
     const qrImage = await QRCode.toDataURL(ultimoQR);
-    res.send(`<h1>🔗 Conectar JK</h1><img src="${qrImage}" width="300"/><script>setTimeout(()=>location.reload(),20000)</script>`);
+    res.send(`<h1>🔗 Conectar WhatsApp JK</h1><img src="${qrImage}" width="300"/><script>setTimeout(()=>location.reload(),20000)</script>`);
 });
 
 async function conectarWhatsApp() {
@@ -35,64 +30,48 @@ async function conectarWhatsApp() {
     sock = makeWASocket({
         version,
         auth: state,
-        logger: pino({ level: "info" }), // Aumentei o nível para ver mais detalhes
+        logger: pino({ level: "error" }),
         browser: ["JK Universitário", "Chrome", "1.0.0"],
         markOnlineOnConnect: true
     });
 
     sock.ev.on("connection.update", (update) => {
         const { connection, lastDisconnect, qr } = update;
-        if (qr) { 
-            console.log("👉 NOVO QR DISPONÍVEL NA URL /");
-            ultimoQR = qr; 
-        }
+        if (qr) ultimoQR = qr;
         if (connection === "close") {
             const motivo = new Boom(lastDisconnect?.error)?.output?.statusCode;
-            console.log("❌ Conexão fechada. Motivo:", motivo);
             if (motivo !== DisconnectReason.loggedOut) conectarWhatsApp();
         } else if (connection === "open") {
-            console.log("✅✅ WHATSAPP CONECTADO E PRONTO!");
-            ultimoQR = null; 
-            statusConexao = "Conectado";
+            ultimoQR = null; statusConexao = "Conectado";
+            console.log("✅✅ WHATSAPP CONECTADO!");
         }
     });
 
     sock.ev.on("creds.update", saveCreds);
 
-    // OUVINTE DE MENSAGENS TURBINADO
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
-        console.log("📩 EVENTO UPSERT DISPARADO!"); // Se isso não aparecer, o bot não está ouvindo o Whats
-
         if (type !== "notify") return;
         const msg = messages[0];
-        
-        // Log básico para saber que algo chegou
-        const jid = msg.key.remoteJid;
-        console.log(`📍 Mensagem de: ${jid}`);
-
         if (!msg.message || msg.key.fromMe) return;
+        
+        const jid = msg.key.remoteJid;
+        const textoChat = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim().toLowerCase();
 
-        const texto = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").toLowerCase();
-        console.log(`📝 Conteúdo: ${texto}`);
+        // Listas atualizadas a cada mensagem (para pegar mudanças no Render sem reiniciar se possível)
+        const listaLavanderia = obterGrupos("GRUPOS_LAVANDERIA");
+        const listaEncomendas = obterGrupos("GRUPOS_ENCOMENDAS");
 
         try {
-            // TESTE RÁPIDO: Se você digitar "teste", ele responde em qualquer lugar
-            if (texto === "teste") {
-                return await sock.sendMessage(jid, { text: "O pai tá on! 😎" });
-            }
+            if (textoChat === "teste") return await sock.sendMessage(jid, { text: "O pai tá on! 😎" });
 
-            if (gruposLavanderia.has(jid)) {
-                console.log("🧺 Roteando para Lavanderia...");
+            if (listaLavanderia.has(jid)) {
                 await tratarMensagemLavanderia(sock, msg, jid);
-            } else if (gruposEncomendas.has(jid)) {
-                console.log("📦 Roteando para Encomendas...");
-                await tratarMensagemEncomendas(sock, msg);
+            } else if (listaEncomendas.has(jid)) {
+                await tratarMensagemEncomendas(sock, msg, jid);
             } else {
-                console.log("⚠️ JID não autorizado nas variáveis de ambiente.");
+                console.log(`⚠️ JID não autorizado: ${jid}`);
             }
-        } catch (err) {
-            console.error("❌ Erro ao processar:", err);
-        }
+        } catch (err) { console.error("❌ Erro:", err); }
     });
 }
 
