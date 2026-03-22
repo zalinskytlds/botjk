@@ -1,6 +1,4 @@
-// ==========================================
-// index.js - JK UNIVERSITÁRIO (QR NA PÁGINA)
-// ==========================================
+import 'dotenv/config'; // Garante que GRUPOS_LAVANDERIA seja lido na linha 1
 import makeWASocket, { 
     useMultiFileAuthState, 
     DisconnectReason, 
@@ -8,9 +6,10 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import express from "express";
-import QRCode from "qrcode"; // Biblioteca para gerar a imagem do QR
+import QRCode from "qrcode";
+import pino from "pino"; // ADICIONADO: Necessário para o Baileys
 import { tratarMensagemLavanderia } from "./lavanderia.js";
-import { tratarMensagemEncomendas } from "./encomendas.js";
+// import { tratarMensagemEncomendas } from "./encomendas.js"; 
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -19,7 +18,7 @@ const PORT = process.env.PORT || 3001;
 let ultimoQR = null;
 let statusConexao = "Aguardando inicialização...";
 
-// IDs dos Grupos (Protegidos via Variáveis de Ambiente no Render)
+// IDs dos Grupos (Lidos do Render)
 const gruposLavanderia = new Set(process.env.GRUPOS_LAVANDERIA?.split(",") || []);
 const gruposEncomendas = new Set(process.env.GRUPOS_ENCOMENDAS?.split(",") || []);
 
@@ -45,13 +44,12 @@ app.get("/conectar", async (req, res) => {
     }
 
     try {
-        // Converte o código do Baileys em uma imagem Base64
         const qrImage = await QRCode.toDataURL(ultimoQR);
         res.send(`
             <div style="text-align:center; font-family:sans-serif; margin-top:50px;">
                 <h1>🔗 Conectar WhatsApp - JK</h1>
                 <p>Abra o WhatsApp > Aparelhos Conectados > Conectar um Aparelho</p>
-                <img src="${qrImage}" style="border: 15px solid white; box-shadow: 0 0 20px rgba(0,0,0,0.2); margin: 20px;" />
+                <img src="${qrImage}" style="border: 15px solid white; box-shadow: 0 0 20px rgba(0,0,0,0.2); margin: 20px; width: 300px;" />
                 <p>Status: <strong>${statusConexao}</strong></p>
                 <script>setTimeout(() => { location.reload(); }, 25000);</script>
                 <p style="font-size: 12px; color: gray;">A página atualiza sozinha a cada 25 segundos.</p>
@@ -66,13 +64,15 @@ app.get("/", (req, res) => res.send("🤖 Bot JK Online. Acesse /conectar para o
 
 // --- LÓGICA DO WHATSAPP ---
 async function conectarWhatsApp() {
+    // Pasta de autenticação persistente no Render (lembre-se de usar disco se possível)
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_jk");
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: true, // Mantemos no terminal por segurança também
+        printQRInTerminal: true,
+        logger: pino({ level: "silent" }), // Adicionado: Evita erros de log
         browser: ["JK Universitário", "Chrome", "1.0.0"]
     });
 
@@ -80,7 +80,7 @@ async function conectarWhatsApp() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            ultimoQR = qr; // Guarda o QR para mostrar na página
+            ultimoQR = qr;
             statusConexao = "Aguardando leitura do QR Code...";
         }
 
@@ -107,16 +107,20 @@ async function conectarWhatsApp() {
         if (type !== "notify") return;
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
+        
         const jid = msg.key.remoteJid;
 
         try {
+            // Verifica se o JID do grupo está na lista de lavanderia
             if (gruposLavanderia.has(jid)) {
+                console.log(`🧺 Mensagem no grupo de Lavanderia: ${jid}`);
                 await tratarMensagemLavanderia(sock, msg, jid);
-            } else if (gruposEncomendas.has(jid)) {
-                await tratarMensagemEncomendas(sock, msg);
-            }
+            } 
+            // else if (gruposEncomendas.has(jid)) {
+            //    await tratarMensagemEncomendas(sock, msg, jid);
+            // }
         } catch (err) {
-            console.error("❌ Erro no fluxo:", err.message);
+            console.error("❌ Erro no processamento da mensagem:", err.message);
         }
     });
 }
