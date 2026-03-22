@@ -2,7 +2,7 @@ import axios from "axios";
 import moment from "moment-timezone";
 
 // LINK DO GOOGLE APPS SCRIPT (Substitua pela sua URL de execução)
-const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/SUA_URL_AQUI/exec"; 
+const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbxWWCtw1_ApknZ45Goj3vHKQZCQMTdqrqCVX-tdcYJgr695OuJ2oR-a6b5LWKqgR2MMIQ/exec"; 
 const HG_API_KEY = process.env.HGBR_API_KEY; 
 const TIMEZONE = "America/Sao_Paulo";
 
