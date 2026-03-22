@@ -21,10 +21,9 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
     if (!URL) return console.error("ERRO: URL_GOOGLE_ENCOMENDAS não definida!");
 
     try {
-        // --- 1. COMANDO DE BAIXA DIRETA (Ex: "ID 1", "id 500") ---
+        // --- 1. COMANDO DE BAIXA DIRETA ---
         if (textoLow.startsWith("id ")) {
             const idBuscado = textoLow.replace("id ", "").trim();
-            
             const res = await axios.post(URL, { 
                 action: "receber", 
                 id: idBuscado,
@@ -35,7 +34,7 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
             if (res.data.result === "success") {
                 const donoJid = res.data.dono;
                 return sock.sendMessage(grupoId, { 
-                    text: `✅ Encomenda *ID ${idBuscado}* CHEGOU!\n\n🔔 @${donoJid.split("@")[0]}, procure ver se foi deixada na mesa da churrasqueira na casa do Antônio!`,
+                    text: `✅ Encomenda *ID ${idBuscado}* CHEGOU!\n\n🔔 @${donoJid.split("@")[0]}, verifique se está na mesa churrasqueira na casa do Antônio!`,
                     mentions: [donoJid]
                 });
             } else {
@@ -47,7 +46,7 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
         if (textoLow === "menu" || textoLow === "sair") {
             delete sessoesEncomenda[jid];
             const saudacao = obterSaudacao();
-            const menu = `📦 ${saudacao}!\n\n*ENCOMENDAS JK*\n\n1️⃣ Registrar encomenda\n2️⃣ Consultar encomenda\n3️⃣ Confirmar recebimento\n4️⃣ Ver Histórico\n\n👉 _Digite ID seguido do número (EX: ID 100)"_`;
+            const menu = `📦 ${saudacao}!\n\n*JK UNIVERSITÁRIO - ENCOMENDAS E AVISOS*\n\n1️⃣ Registrar encomenda\n2️⃣ Consultar encomenda\n3️⃣ Registrar recebimento\n4️⃣ Ver Histórico\n\n👉 _Digite o número ou use "ID [número]"_`;
             return sock.sendMessage(grupoId, { text: menu });
         }
 
@@ -55,12 +54,12 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
         if (sessoesEncomenda[jid]?.etapa === "pergunta_data") {
             sessoesEncomenda[jid].dataPrevista = textoRaw;
             sessoesEncomenda[jid].etapa = "pergunta_loja";
-            return sock.sendMessage(grupoId, { text: "🛍️ De onde é a sua encomenda? (Ex: Amazon, Shopee Mercado Livre Delivery):" });
+            return sock.sendMessage(grupoId, { text: "🛍️ De onde é a encomenda? (Ex: Amazon, Shopee,Mercado Livre, Delivery e etc):" });
         }
         if (sessoesEncomenda[jid]?.etapa === "pergunta_loja") {
             sessoesEncomenda[jid].loja = textoRaw;
             sessoesEncomenda[jid].etapa = "pergunta_nome";
-            return sock.sendMessage(grupoId, { text: "👤 Digite o seu nome" });
+            return sock.sendMessage(grupoId, { text: "👤 Informe o seu nome?" });
         }
         if (sessoesEncomenda[jid]?.etapa === "pergunta_nome") {
             const dados = sessoesEncomenda[jid];
@@ -72,41 +71,36 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
                 usuario: jid 
             });
             delete sessoesEncomenda[jid];
-            return sock.sendMessage(grupoId, { text: `✅ Previsão para *${textoRaw.toUpperCase()}* registrada!` });
+            return sock.sendMessage(grupoId, { text: `✅ Previsão para *${textoRaw.toUpperCase()}* anotada!` });
         }
 
-        // --- 4. OPÇÕES DO MENU (SWITCH) ---
+        // --- 4. OPÇÕES DO MENU ---
         switch (textoLow) {
             case "1":
                 sessoesEncomenda[jid] = { etapa: "pergunta_data" };
-                return sock.sendMessage(grupoId, { text: "📅 Qual a data aproximada para sua entrega? (Ex: 25/03)" });
-
+                return sock.sendMessage(grupoId, { text: "📅 Qual a data prevista? (Ex: 25/03)" });
             case "2":
                 const resCons = await axios.post(URL, { action: "consultar" });
                 const listaC = resCons.data.lista.map(r => `• ID: ${r[0]} - ${r[2]} (*${r[3]}*)`).join("\n");
                 return sock.sendMessage(grupoId, { text: `🔍 *ESPERADAS:*\n\n${listaC || "Vazio."}` });
-
             case "3":
                 const resBaixa = await axios.post(URL, { action: "consultar" });
                 if (!resBaixa.data.lista?.length) return sock.sendMessage(grupoId, { text: "📭 Nada para receber." });
-                
                 let msgBaixa = "📦 *CONFIRMAR CHEGADA*\nDigite *ID* + o número correspondente:\n\n";
                 resBaixa.data.lista.forEach(r => msgBaixa += `🆔 *ID ${r[0]}* - ${r[2]} (${r[3]})\n`);
                 return sock.sendMessage(grupoId, { text: msgBaixa });
-
             case "4":
                 const resHist = await axios.post(URL, { action: "historico" });
                 const listaH = resHist.data.lista.map(r => `✅ *${r[3]}* - ${r[2]} (${r[6]})`).join("\n");
                 return sock.sendMessage(grupoId, { text: `📜 *ÚLTIMAS ENTREGAS:*\n\n${listaH || "Vazio."}` });
         }
-
     } catch (error) {
-        console.error("Erro:", error.message);
+        console.error("Erro Encomendas:", error.message);
         return sock.sendMessage(grupoId, { text: "❌ Erro na comunicação com o sistema." });
     }
 }
 
-// --- MONITOR DE PARTICIPANTES (BOAS-VINDAS E TCHAU) ---
+// --- MONITOR DE PARTICIPANTES ---
 export function configurarEventosEncomendas(sock) {
     sock.ev.on('group-participants.update', async (num) => {
         const idGrupo = num.id;
@@ -116,24 +110,20 @@ export function configurarEventosEncomendas(sock) {
         if (num.action === 'add') {
             const boasVindas = `📦 ${saudacao}! Seja bem-vindo(a) à **JK Universitário** @${participante.split('@')[0]}!\n\n` +
                                `Este é o nosso canal oficial para **Encomendas e Avisos Gerais**. 📢\n\n` +
-                               `• *Encomendas:* Registre suas previsões aqui. Quando chegar e alguém receber, será confirmado por aqui!\n` +
+                               `• *Encomendas:* Registre suas previsões aqui. Quando chegar e alguem receber, avisamos por aqui!\n` +
                                `• *Comunicados:* Fique atento a este grupo para avisos de manutenção, coleta de lixo e informações importantes da pousada.\n\n` +
                                `Use o comando *Menu* para ver as opções! 🚀`;
             
             await sock.sendMessage(idGrupo, { text: boasVindas, mentions: [participante] });
-
-            // Envia o log para a planilha (Opcional, mas recomendado)
-            await axios.post(URL, { 
-                action: "log_evento", 
-                usuario: participante, 
-                evento: "ENTROU NO GRUPO" 
-            }).catch(e => console.log("Erro log planilha:", e.message));
-        }
+            
+            await axios.post(URL, { action: "log_evento", usuario: participante, evento: "ENTROU" }).catch(() => {});
         }
 
         if (num.action === 'remove') {
-            const adeus = `👋 O morador @${participante.split('@')[0]} saiu do grupo JK Universitário.`;
+            const adeus = `👋 O morador @${participante.split('@')[0]} saiu do grupo de encomendas.`;
             await sock.sendMessage(idGrupo, { text: adeus, mentions: [participante] });
+            
+            await axios.post(URL, { action: "log_evento", usuario: participante, evento: "SAIU" }).catch(() => {});
         }
     });
 }
