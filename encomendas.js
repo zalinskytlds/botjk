@@ -1,123 +1,78 @@
 import axios from "axios";
-import moment from "moment-timezone";
+const URL = process.env.URL_GOOGLE_ENCOMENDAS;
+let sessoesEncomenda = {}; 
 
-// ================== CONFIG ==================
-// Use uma única URL de Script do Google e controle as abas por lá, ou URLs diferentes se preferir
-const URL_GOOGLE_ENCOMENDAS = process.env.URL_GOOGLE_ENCOMENDAS || "https://script.google.com/macros/s/LINK_DA_PLANILHA_ENCOMENDAS/exec";
+export async function tratarMensagemEncomendas(sock, msg, grupoId) {
+    const jid = msg.key.participant || msg.key.remoteJid;
+    const texto = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim();
+    const textoLow = texto.toLowerCase();
 
-const TIMEZONE = "America/Sao_Paulo";
-const estadosUsuarios = {};
-const timeoutUsuarios = {};
-const TEMPO_EXPIRACAO_MS = 10 * 60 * 1000;
-
-// ================== UTIL ==================
-function iniciarTimeout(id) {
-  if (timeoutUsuarios[id]) clearTimeout(timeoutUsuarios[id]);
-  timeoutUsuarios[id] = setTimeout(() => {
-    delete estadosUsuarios[id];
-    delete timeoutUsuarios[id];
-  }, TEMPO_EXPIRACAO_MS);
-}
-
-function extrairTexto(msg) {
-  return (msg?.message?.conversation || msg?.message?.extendedTextMessage?.text || "").trim().toLowerCase();
-}
-
-// ================== MENU ==================
-function menuTexto() {
-  return `📦 *ENCOMENDAS - JK UNIVERSITÁRIO*\n\n1️⃣ Registrar Encomenda\n2️⃣ Ver Encomendas Ativas\n3️⃣ Confirmar Retirada\n4️⃣ Ver Histórico\n\n👉 _Digite o número da opção ou *menu* para voltar._`;
-}
-
-// ================== FLUXO PRINCIPAL ==================
-export async function tratarMensagemEncomendas(sock, msg) {
-  const remetente = msg.key.remoteJid;
-  const textoUsuario = extrairTexto(msg);
-  if (!textoUsuario) return;
-
-  const idSessao = msg.key.participant || remetente;
-  iniciarTimeout(idSessao);
-
-  // Comando de Reset/Menu
-  if (["menu", "ajuda", "oi"].includes(textoUsuario)) {
-    estadosUsuarios[idSessao] = { etapa: "menu" };
-    return sock.sendMessage(remetente, { text: menuTexto() });
-  }
-
-  const estado = estadosUsuarios[idSessao] || { etapa: "menu" };
-
-  try {
-    // --- ETAPA: MENU PRINCIPAL ---
-    if (estado.etapa === "menu") {
-      switch (textoUsuario) {
-        case "1":
-          estado.etapa = "esperandoNome";
-          estadosUsuarios[idSessao] = estado;
-          return sock.sendMessage(remetente, { text: "👤 *Registrar:* Qual o nome do destinatário (Morador)?" });
-
-        case "2":
-          const { data: lista } = await axios.get(URL_GOOGLE_ENCOMENDAS);
-          const ativas = lista.filter(e => e.status === "pendente");
-          if (!ativas.length) return sock.sendMessage(remetente, { text: "📭 Nenhuma encomenda pendente no momento." });
-          
-          let txtLista = "📋 *Encomendas na Portaria:*\n\n";
-          ativas.forEach(e => txtLista += `🆔 *${e.ID}* - ${e.nome}\n`);
-          return sock.sendMessage(remetente, { text: txtLista });
-
-        case "3":
-          estado.etapa = "esperandoIDRetirada";
-          estadosUsuarios[idSessao] = estado;
-          return sock.sendMessage(remetente, { text: "🆔 Informe o *ID* da encomenda que está sendo retirada:" });
-
-        case "4":
-          const { data: historico } = await axios.get(URL_GOOGLE_ENCOMENDAS);
-          let txtHist = "📜 *Últimas 5 Retiradas:*\n\n";
-          historico.filter(e => e.status === "entregue").slice(-5).forEach(e => {
-            txtHist += `✅ ${e.nome} (Retirado por: ${e.recebedor})\n`;
-          });
-          return sock.sendMessage(remetente, { text: txtHist });
-
-        default:
-          return sock.sendMessage(remetente, { text: "❌ Opção inválida. Digite de 1 a 4." });
-      }
+    // Resetar sessão se digitar menu
+    if (textoLow === "menu") {
+        delete sessoesEncomenda[jid];
+        const menu = `📦 *ENCOMENDAS JK*\n\n1️⃣ Registrar previsão\n2️⃣ Consultar esperadas\n3️⃣ Confirmar chegada (Baixa)\n4️⃣ Ver Histórico de Entregas`;
+        return sock.sendMessage(grupoId, { text: menu });
     }
 
-    // --- ETAPA: REGISTRAR (NOME) ---
-    if (estado.etapa === "esperandoNome") {
-      const nomeMorador = textoUsuario.toUpperCase();
-      await axios.post(URL_GOOGLE_ENCOMENDAS, {
-        action: "registrar",
-        id: Date.now().toString().slice(-6), // ID curto de 6 dígitos
-        nome: nomeMorador,
-        status: "pendente",
-        data: moment().tz(TIMEZONE).format("DD/MM/YYYY HH:mm")
-      });
-      delete estadosUsuarios[idSessao];
-      return sock.sendMessage(remetente, { text: `✅ Encomenda para *${nomeMorador}* registrada com sucesso!` });
+    // --- OPÇÃO 1: REGISTRAR ---
+    if (texto === "1") {
+        sessoesEncomenda[jid] = { etapa: "pergunta_data" };
+        return sock.sendMessage(grupoId, { text: "📅 Qual a data prevista para a chegada? (Ex: 01/01/1900)" });
+    }
+    if (sessoesEncomenda[jid]?.etapa === "pergunta_data") {
+        sessoesEncomenda[jid].dataPrevista = texto;
+        sessoesEncomenda[jid].etapa = "pergunta_loja";
+        return sock.sendMessage(grupoId, { text: "🛍️ De onde é a encomenda? (Mercado Livre, Amazon, Shopee, etc):" });
+    }
+    if (sessoesEncomenda[jid]?.etapa === "pergunta_loja") {
+        sessoesEncomenda[jid].loja = texto;
+        sessoesEncomenda[jid].etapa = "pergunta_apto";
+        return sock.sendMessage(grupoId, { text: "🏠 Qual o número do apartamento?" });
+    }
+    if (sessoesEncomenda[jid]?.etapa === "pergunta_apto") {
+        const dados = sessoesEncomenda[jid];
+        await axios.post(URL, { action: "registrar", dataPrevista: dados.dataPrevista, loja: dados.loja, apto: texto, usuario: jid });
+        delete sessoesEncomenda[jid];
+        return sock.sendMessage(grupoId, { text: "✅ Previsão anotada nos logs! Avisaremos quando chegar." });
     }
 
-    // --- ETAPA: RETIRADA (ID) ---
-    if (estado.etapa === "esperandoIDRetirada") {
-      estado.idParaRetirada = textoUsuario;
-      estado.etapa = "esperandoQuemRetirou";
-      estadosUsuarios[idSessao] = estado;
-      return sock.sendMessage(remetente, { text: "✋ Quem está retirando a encomenda? (Nome do morador ou parente)" });
+    // --- OPÇÃO 2: CONSULTAR ESPERADAS ---
+    if (texto === "2") {
+        const res = await axios.post(URL, { action: "consultar" });
+        const lista = res.data.lista.map(r => `• ${r[2]} (Apto ${r[3]}) - Previsto: ${r[1]}`).join("\n");
+        return sock.sendMessage(grupoId, { text: lista || "Nenhuma encomenda pendente." });
     }
 
-    // --- ETAPA: RETIRADA (QUEM RECEBEU) ---
-    if (estado.etapa === "esperandoQuemRetirou") {
-      const recebedor = textoUsuario.toUpperCase();
-      await axios.post(URL_GOOGLE_ENCOMENDAS, {
-        action: "entregar",
-        id: estado.idParaRetirada,
-        recebedor: recebedor,
-        data_entrega: moment().tz(TIMEZONE).format("DD/MM/YYYY HH:mm")
-      });
-      delete estadosUsuarios[idSessao];
-      return sock.sendMessage(remetente, { text: `✅ Entrega confirmada para *${recebedor}*!\nObrigado.` });
+    // --- OPÇÃO 3: CHEGOU / RECEBER ---
+    if (texto === "3") {
+        const res = await axios.post(URL, { action: "consultar" });
+        if (res.data.lista.length === 0) return sock.sendMessage(grupoId, { text: "Nada para receber." });
+        let msgLista = "📦 *CONFIRMAR CHEGADA*\nDigite o ID correspondente:\n\n";
+        res.data.lista.forEach(r => msgLista += `🆔 *${r[0]}*\n🛍️ ${r[2]} (Apto ${r[3]})\n\n`);
+        sessoesEncomenda[jid] = { etapa: "pergunta_id" };
+        return sock.sendMessage(grupoId, { text: msgLista });
+    }
+    if (sessoesEncomenda[jid]?.etapa === "pergunta_id") {
+        sessoesEncomenda[jid].idEscolhido = texto;
+        sessoesEncomenda[jid].etapa = "pergunta_quem_recebeu";
+        return sock.sendMessage(grupoId, { text: "👤 Quem está a receber esta encomenda na portaria agora?" });
+    }
+    if (sessoesEncomenda[jid]?.etapa === "pergunta_quem_recebeu") {
+        const res = await axios.post(URL, { action: "receber", id: sessoesEncomenda[jid].idEscolhido, quemRecebeu: texto, dataChegada: new Date().toLocaleString("pt-BR") });
+        const dono = res.data.dono;
+        delete sessoesEncomenda[jid];
+        return sock.sendMessage(grupoId, { text: `🔔 @${dono.split("@")[0]}, a sua encomenda chegou! Recebida por: *${texto}*`, mentions: [dono] });
     }
 
-  } catch (err) {
-    console.error("Erro Encomendas:", err.message);
-    return sock.sendMessage(remetente, { text: "❌ Erro ao acessar o banco de dados." });
-  }
+    // --- OPÇÃO 4: HISTÓRICO ---
+    if (texto === "4") {
+        const res = await axios.post(URL, { action: "historico" });
+        if (res.data.lista.length === 0) return sock.sendMessage(grupoId, { text: "📜 O histórico está vazio." });
+        
+        let msgHist = "📜 *ÚLTIMAS ENTREGAS REALIZADAS:*\n\n";
+        res.data.lista.slice(-10).forEach(r => { // Mostra as últimas 10
+            msgHist += `✅ *Apto ${r[3]}* (${r[2]})\n👤 Recebido por: ${r[7]}\n📅 em: ${r[6]}\n\n`;
+        });
+        return sock.sendMessage(grupoId, { text: msgHist });
+    }
 }
