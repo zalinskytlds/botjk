@@ -4,11 +4,11 @@ import { Boom } from "@hapi/boom";
 import express from "express";
 import QRCode from "qrcode";
 import pino from "pino"; 
-import { tratarMensagemLavanderia } from "./lavanderia.js";
-import { tratarMensagemEncomendas } from "./encomendas.js";
+// Importando as funções de tratamento e os novos configuradores de eventos
+import { tratarMensagemLavanderia, configurarEventosGrupo as eventosLavanderia } from "./lavanderia.js"; 
+import { tratarMensagemEncomendas, configurarEventosEncomendas } from "./encomendas.js";
 
 const app = express();
-// ESSENCIAL: Permite que o Express leia o JSON enviado pelo Google Script
 app.use(express.json()); 
 
 const PORT = process.env.PORT || 10000;
@@ -25,21 +25,16 @@ app.get("/", async (req, res) => {
     res.send(`<h1>🔗 Conectar WhatsApp JK</h1><img src="${qrImage}" width="300"/><script>setTimeout(()=>location.reload(),20000)</script>`);
 });
 
-// --- ROTA DE AVISO AUTOMÁTICO (Vem do Google Script) ---
 app.post("/aviso-lavanderia", async (req, res) => {
     const { jid, grupo, mensagem } = req.body;
-
     if (!sock) return res.status(500).send("Bot deslogado");
-
     try {
-        // Se for um aviso de morador (jid real), faz a menção
         if (jid && jid !== "admin") {
             await sock.sendMessage(grupo, { 
                 text: `@${jid.split('@')[0]} ${mensagem}`, 
                 mentions: [jid] 
             });
         } else {
-            // Se for aviso geral (como o do lixo), manda apenas o texto
             await sock.sendMessage(grupo, { text: mensagem });
         }
         res.status(200).send("OK");
@@ -60,6 +55,12 @@ async function conectarWhatsApp() {
         browser: ["JK Universitário", "Chrome", "1.0.0"],
         markOnlineOnConnect: true
     });
+
+    // --- CONFIGURAÇÃO DE EVENTOS DE GRUPO (ENTRADA/SAÍDA) ---
+    // Ativa para o grupo de Lavanderia
+    eventosLavanderia(sock);
+    // Ativa para o grupo de Encomendas (já preparado para quando criarmos a função)
+    configurarEventosEncomendas(sock);
 
     sock.ev.on("connection.update", (update) => {
         const { connection, lastDisconnect, qr } = update;
