@@ -1,8 +1,8 @@
 import axios from "axios";
 import moment from "moment-timezone";
 
-// LINK DO GOOGLE APPS SCRIPT (Substitua pela sua URL de execução)
-const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbxWWCtw1_ApknZ45Goj3vHKQZCQMTdqrqCVX-tdcYJgr695OuJ2oR-a6b5LWKqgR2MMIQ/exec"; 
+// Configurações vindas do Render
+const URL_GOOGLE_SCRIPT = process.env.URL_GOOGLE_LAVANDERIA; 
 const HG_API_KEY = process.env.HGBR_API_KEY; 
 const TIMEZONE = "America/Sao_Paulo";
 
@@ -15,8 +15,10 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
     const agora = Date.now();
 
     try {
-        // 1. BUSCAR DADOS (O Script do Google deve retornar um JSON com a lista de registros)
-        const { data } = await axios.get(URL_GOOGLE_SCRIPT);
+        // 1. BUSCAR DADOS DO GOOGLE SCRIPT
+        const response = await axios.get(URL_GOOGLE_SCRIPT);
+        const data = Array.isArray(response.data) ? response.data : [];
+        
         const registroAtivo = data.find(r => r.status === "em_uso");
         const filaEspera = data.filter(r => r.status === "na_fila");
 
@@ -28,11 +30,11 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                     text: `⚠️ @${registroAtivo.usuario.split("@")[0]}, sua lavagem termina em 10 min!`,
                     mentions: [registroAtivo.usuario]
                 });
-                // Envia comando para marcar aviso como enviado
                 await axios.post(URL_GOOGLE_SCRIPT, { action: "marcarAviso", id: registroAtivo.ID });
             }
         }
 
+        // --- PROCESSAMENTO DOS COMANDOS ---
         switch (texto) {
             case "menu":
             case "oi":
@@ -75,31 +77,33 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                 return sock.sendMessage(grupoId, { text: "🚶‍♂️ Você saiu da fila." });
 
             case "7": // SORTEAR
-                const peso = (Math.random() * (8.0 - 1.0) + 1.0).toFixed(2);
-                return sock.sendMessage(grupoId, { text: `🎲 *Sorteio:* Sua carga estimada é de *${peso}kg*.` });
+                const peso = (Math.random() * (7.5 - 1.0) + 1.0).toFixed(2);
+                return sock.sendMessage(grupoId, { text: `🎲 *Sorteio:* Sua carga estimada hoje é de *${peso}kg*.` });
 
             case "8":
-                return sock.sendMessage(grupoId, { text: "⏰ *Horário:* Aberto das 07h às 23h." });
+                return sock.sendMessage(grupoId, { text: "⏰ *Horário:* Uso permitido das 07h às 23h." });
 
-            case "9": // PREVISÃO DO TEMPO (HG Brasil)
+            case "9": // PREVISÃO DO TEMPO
                 try {
                     const resClima = await axios.get(`https://api.hgbrasil.com/weather?key=${HG_API_KEY}&city_name=Viamao,RS`);
                     const w = resClima.data.results;
-                    return sock.sendMessage(grupoId, { text: `🌦️ *Clima em ${w.city}*\n🌡️ ${w.temp}°C - ${w.description}\n💧 Humidade: ${w.humidity}%` });
+                    return sock.sendMessage(grupoId, { text: `🌦️ *Clima em Viamão*\n🌡️ ${w.temp}°C - ${w.description}\n💧 Umidade: ${w.humidity}%` });
                 } catch (e) { return sock.sendMessage(grupoId, { text: "❌ Erro ao consultar clima." }); }
 
             case "10":
-                return sock.sendMessage(grupoId, { text: "🗑️ *Lixo:* Coleta Seg, Qua e Sex (Noite)." });
+                return sock.sendMessage(grupoId, { text: "🗑️ *Lixo:* Coleta Segundas, Quartas e Sextas (período da noite)." });
 
             case "+10":
             case "+30": // ESTENDER TEMPO
                 if (registroAtivo && remetente === registroAtivo.usuario) {
-                    const add = parseInt(texto.replace("+", "")) * 60000;
-                    const novoFim = parseInt(registroAtivo.fim_previsto) + add;
+                    const minutosAdicionais = parseInt(texto.replace("+", ""));
+                    const novoFim = parseInt(registroAtivo.fim_previsto) + (minutosAdicionais * 60000);
                     await axios.post(URL_GOOGLE_SCRIPT, { action: "estender", id: registroAtivo.ID, novoFim: novoFim });
-                    return sock.sendMessage(grupoId, { text: `✅ Estendido até ${moment(novoFim).tz(TIMEZONE).format("HH:mm")}` });
+                    return sock.sendMessage(grupoId, { text: `✅ Tempo estendido até *${moment(novoFim).tz(TIMEZONE).format("HH:mm")}*` });
                 }
                 break;
         }
-    } catch (err) { console.log("Erro no módulo:", err.message); }
+    } catch (err) { 
+        console.log("❌ Erro Lavanderia:", err.message);
+    }
 }
