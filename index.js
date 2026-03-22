@@ -12,14 +12,15 @@ import { tratarMensagemLavanderia } from "./lavanderia.js";
 import { tratarMensagemEncomendas } from "./encomendas.js";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 10000; // Render usa 10000 por padrão
 
 let ultimoQR = null;
 let statusConexao = "Aguardando inicialização...";
 
 // IDs dos Grupos (Configurados no Render)
-const gruposLavanderia = new Set(process.env.GRUPOS_LAVANDERIA?.split(",") || []);
-const gruposEncomendas = new Set(process.env.GRUPOS_ENCOMENDAS?.split(",") || []);
+// DICA: Certifique-se de que não há espaços extras nas variáveis do Render
+const gruposLavanderia = new Set(process.env.GRUPOS_LAVANDERIA?.split(",").map(id => id.trim()) || []);
+const gruposEncomendas = new Set(process.env.GRUPOS_ENCOMENDAS?.split(",").map(id => id.trim()) || []);
 
 // --- ROTA DA PÁGINA DE CONEXÃO ---
 app.get("/conectar", async (req, res) => {
@@ -36,7 +37,7 @@ app.get("/conectar", async (req, res) => {
         return res.send(`
             <div style="text-align:center; font-family:sans-serif; margin-top:50px;">
                 <h1>⏳ Gerando QR Code...</h1>
-                <p>Aguarde alguns segundos e atualize a página.</p>
+                <p>Aguarde uns segundos, o servidor do Render está acordando.</p>
                 <script>setTimeout(() => { location.reload(); }, 5000);</script>
             </div>
         `);
@@ -68,8 +69,7 @@ async function conectarWhatsApp() {
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: true,
-        logger: pino({ level: "silent" }), 
+        logger: pino({ level: "error" }), // Menos poluição nos logs
         browser: ["JK Universitário", "Chrome", "1.0.0"]
     });
 
@@ -77,6 +77,7 @@ async function conectarWhatsApp() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
+            console.log("👉 NOVO QR CODE GERADO! Acesse a URL /conectar");
             ultimoQR = qr;
             statusConexao = "Aguardando leitura do QR Code...";
         }
@@ -94,7 +95,7 @@ async function conectarWhatsApp() {
         } else if (connection === "open") {
             ultimoQR = null;
             statusConexao = "Conectado";
-            console.log("✅ Conexão aberta com sucesso!");
+            console.log("✅ WHATSAPP CONECTADO COM SUCESSO!");
         }
     });
 
@@ -106,16 +107,20 @@ async function conectarWhatsApp() {
         if (!msg.message || msg.key.fromMe) return;
         
         const jid = msg.key.remoteJid;
+        const textoChat = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").toLowerCase();
+
+        // --- LOG DE DIAGNÓSTICO (OLHE ISSO NO PAINEL DO RENDER) ---
+        console.log(`📩 MENSAGEM RECEBIDA | ID: ${jid} | TEXTO: ${textoChat}`);
 
         try {
             // Roteamento para Lavanderia
             if (gruposLavanderia.has(jid)) {
-                console.log(`🧺 Processando Lavanderia no grupo: ${jid}`);
+                console.log(`🧺 Processando Lavanderia...`);
                 await tratarMensagemLavanderia(sock, msg, jid);
             } 
             // Roteamento para Encomendas
             else if (gruposEncomendas.has(jid)) {
-                console.log(`📦 Processando Encomendas no grupo: ${jid}`);
+                console.log(`📦 Processando Encomendas...`);
                 await tratarMensagemEncomendas(sock, msg);
             }
         } catch (err) {
