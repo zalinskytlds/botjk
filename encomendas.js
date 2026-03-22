@@ -1,7 +1,17 @@
 import axios from "axios";
+import moment from "moment-timezone";
 
 const URL = process.env.URL_GOOGLE_ENCOMENDAS;
+const TIMEZONE = "America/Sao_Paulo";
 let sessoesEncomenda = {}; 
+
+// --- FUNÇÃO PARA SAUDAÇÃO DINÂMICA ---
+const obterSaudacao = () => {
+    const hora = moment().tz(TIMEZONE).hour();
+    if (hora >= 5 && hora < 12) return "Bom dia";
+    if (hora >= 12 && hora < 18) return "Boa tarde";
+    return "Boa noite";
+};
 
 export async function tratarMensagemEncomendas(sock, msg, grupoId) {
     const jid = msg.key.participant || msg.key.remoteJid;
@@ -12,7 +22,6 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
 
     try {
         // --- 1. COMANDO DE BAIXA DIRETA (Ex: "ID 1", "id 500") ---
-        // Isso roda ANTES de qualquer outra lógica para não confundir com o menu
         if (textoLow.startsWith("id ")) {
             const idBuscado = textoLow.replace("id ", "").trim();
             
@@ -37,12 +46,12 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
         // --- 2. MENU E VOLTAR ---
         if (textoLow === "menu" || textoLow === "sair") {
             delete sessoesEncomenda[jid];
-            const menu = `📦 *ENCOMENDAS JK*\n\n1️⃣ Registrar previsão\n2️⃣ Consultar esperadas\n3️⃣ Confirmar chegada (Baixa)\n4️⃣ Ver Histórico\n\n👉 _Digite o número ou use "ID [número]"_`;
+            const saudacao = obterSaudacao();
+            const menu = `📦 ${saudacao}!\n\n*ENCOMENDAS JK*\n\n1️⃣ Registrar previsão\n2️⃣ Consultar esperadas\n3️⃣ Confirmar chegada (Baixa)\n4️⃣ Ver Histórico\n\n👉 _Digite o número ou use "ID [número]"_`;
             return sock.sendMessage(grupoId, { text: menu });
         }
 
         // --- 3. LÓGICA DE REGISTRO (ETAPAS) ---
-        // Só entra aqui se houver uma sessão ativa para o usuário
         if (sessoesEncomenda[jid]?.etapa === "pergunta_data") {
             sessoesEncomenda[jid].dataPrevista = textoRaw;
             sessoesEncomenda[jid].etapa = "pergunta_loja";
@@ -95,4 +104,23 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
         console.error("Erro:", error.message);
         return sock.sendMessage(grupoId, { text: "❌ Erro na comunicação com o sistema." });
     }
+}
+
+// --- MONITOR DE PARTICIPANTES (BOAS-VINDAS E TCHAU) ---
+export function configurarEventosEncomendas(sock) {
+    sock.ev.on('group-participants.update', async (num) => {
+        const idGrupo = num.id;
+        const participante = num.participants[0];
+        const saudacao = obterSaudacao();
+
+        if (num.action === 'add') {
+            const boasVindas = `📦 ${saudacao}! Seja bem-vindo(a) ao grupo de **Encomendas JK** @${participante.split('@')[0]}!\n\nUse este grupo para registrar suas previsões de entrega. Assim, quando sua encomenda chegar, eu te aviso aqui na hora! 🔔`;
+            await sock.sendMessage(idGrupo, { text: boasVindas, mentions: [participante] });
+        }
+
+        if (num.action === 'remove') {
+            const adeus = `👋 O morador @${participante.split('@')[0]} saiu do grupo de encomendas.`;
+            await sock.sendMessage(idGrupo, { text: adeus, mentions: [participante] });
+        }
+    });
 }
