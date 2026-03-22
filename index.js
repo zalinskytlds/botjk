@@ -62,7 +62,7 @@ async function conectarWhatsApp() {
         const listaEncomendas = obterGrupos("GRUPOS_ENCOMENDAS");
 
         try {
-            if (textoChat === "teste") return await sock.sendMessage(jid, { text: "O pai tá on! 😎" });
+            if (textoChat === "teste") return await sock.sendMessage(jid, { text: "Teste realizado com sucesso! 😎" });
 
             if (listaLavanderia.has(jid)) {
                 await tratarMensagemLavanderia(sock, msg, jid);
