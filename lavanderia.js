@@ -16,6 +16,9 @@ const obterSaudacao = () => {
 export async function tratarMensagemLavanderia(sock, msg, grupoId) {
     const texto = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim().toLowerCase();
     const remetente = msg.key?.participant || msg.key?.remoteJid || "";
+    
+    // CAPTURA O NOME DO PERFIL DO USUÁRIO
+    const nomeMorador = msg.pushName || "Morador Desconhecido";
 
     try {
         const response = await axios.get(URL_GOOGLE_SCRIPT);
@@ -65,7 +68,8 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                     });
                 }
 
-                const resIni = await axios.post(URL_GOOGLE_SCRIPT, { action: "iniciar", usuario: remetente });
+                // ADICIONADO "nome" NO PAYLOAD
+                const resIni = await axios.post(URL_GOOGLE_SCRIPT, { action: "iniciar", usuario: remetente, nome: nomeMorador });
                 
                 // Aviso de 10 minutos (110 min após início)
                 const tempoDeEsperaMs = 110 * 60 * 1000; 
@@ -81,7 +85,7 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                     await sock.sendMessage(grupoId, { text: textoAviso, mentions: mencoes });
                 }, tempoDeEsperaMs);
 
-                const mensagemSucesso = `🚿 *LAVAGEM INICIADA COM SUCESSO!*\n\n👤 @${remetente.split("@")[0]}\n⏰ *Início:* ${agoraSaoPaulo.format("HH:mm")}\n🏁 *Fim Previsto:* ${resIni.data.fim}\n\n🚫 *ALERTAS:*\n1️⃣ **SABÃO LÍQUIDO APENAS:** O pó danifica o motor e o tripé do cesto.\n2️⃣ **DISTRIBUIÇÃO:** Espalhe bem a roupa. Pouca roupa ou tudo de um lado só faz a máquina "pular" e trepidar.\n3️⃣ **LIMITE:** Respeite os 8,5kg para não queimar o motor.\n\n_Você receberá um aviso 10 minutos antes do término!_ 🤝`;
+                const mensagemSucesso = `🚿 *LAVAGEM INICIADA COM SUCESSO!*\n\n👤 *Morador:* ${nomeMorador}\n⏰ *Início:* ${agoraSaoPaulo.format("HH:mm")}\n🏁 *Fim Previsto:* ${resIni.data.fim}\n\n🚫 *ALERTAS:*\n1️⃣ **SABÃO LÍQUIDO APENAS:** O pó danifica o motor e o tripé do cesto.\n2️⃣ **DISTRIBUIÇÃO:** Espalhe bem a roupa. Pouca roupa ou tudo de um lado só faz a máquina "pular" e trepidar.\n3️⃣ **LIMITE:** Respeite os 8,5kg para não queimar o motor.\n\n_Você receberá um aviso 10 minutos antes do término!_ 🤝`;
                 return sock.sendMessage(grupoId, { 
                     text: mensagemSucesso, 
                     mentions: [remetente] 
@@ -111,9 +115,10 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                         mentions: [remetente]
                     });
                 }
-                await axios.post(URL_GOOGLE_SCRIPT, { action: "entrarFila", usuario: remetente });
+                // ADICIONADO "nome" NO PAYLOAD
+                await axios.post(URL_GOOGLE_SCRIPT, { action: "entrarFila", usuario: remetente, nome: nomeMorador });
                 const posicao = filaEspera.length + 1;
-                let mensagemFila = `⏳ *FILA DE ESPERA - JK UNIVERSITÁRIO*\n\n✅ @${remetente.split("@")[0]}, sua solicitação foi registrada!\n📍 Sua posição atual: *${posicao}º lugar*\n\n`;
+                let mensagemFila = `⏳ *FILA DE ESPERA - JK UNIVERSITÁRIO*\n\n✅ *${nomeMorador}*, sua solicitação foi registrada!\n📍 Sua posição atual: *${posicao}º lugar*\n\n`;
                 if (posicao === 1) {
                     mensagemFila += `🚀 Você é o próximo! Assim que a máquina for liberada (Case 4), você será notificado aqui no grupo.`;
                 } else {
@@ -202,17 +207,23 @@ export function configurarEventosGrupo(sock) {
         const idGrupo = num.id;
         const participante = num.participants[0];
         const saudacao = obterSaudacao();
+        
+        // Tentar obter o nome do usuário se disponível no cache do sock
+        const contato = sock.contacts[participante] || {};
+        const nomeParticipante = contato.notify || contato.name || participante.split('@')[0];
 
         if (num.action === 'add') {
-            const boasVindas = `👋 ${saudacao}! Seja bem-vindo(a) à **JK Universitário** @${participante.split('@')[0]}!\n\nSou o assistente da nossa lavanderia. Digite *Menu* para conhecer as regras e gerenciar o uso da máquina. 🧺`;
+            const boasVindas = `👋 ${saudacao}! Seja bem-vindo(a) à **JK Universitário** *${nomeParticipante}*!\n\nSou o assistente da nossa lavanderia. Digite *Menu* para conhecer as regras e gerenciar o uso da máquina. 🧺`;
             await sock.sendMessage(idGrupo, { text: boasVindas, mentions: [participante] });
-            await axios.post(URL_GOOGLE_SCRIPT, { action: "log_evento", usuario: participante, evento: "entrou" });
+            // ADICIONADO "nome" NO LOG
+            await axios.post(URL_GOOGLE_SCRIPT, { action: "log_evento", usuario: participante, nome: nomeParticipante, evento: "entrou" });
         }
 
         if (num.action === 'remove') {
-            const adeus = `👋 O morador @${participante.split('@')[0]} saiu do grupo. Desejamos boa sorte na jornada!`;
+            const adeus = `👋 O morador *${nomeParticipante}* saiu do grupo. Desejamos boa sorte na jornada!`;
             await sock.sendMessage(idGrupo, { text: adeus, mentions: [participante] });
-            await axios.post(URL_GOOGLE_SCRIPT, { action: "log_evento", usuario: participante, evento: "saiu" });
+            // ADICIONADO "nome" NO LOG
+            await axios.post(URL_GOOGLE_SCRIPT, { action: "log_evento", usuario: participante, nome: nomeParticipante, evento: "saiu" });
         }
     });
 }
