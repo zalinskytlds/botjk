@@ -67,6 +67,7 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
 
                 const resIni = await axios.post(URL_GOOGLE_SCRIPT, { action: "iniciar", usuario: remetente });
                 
+                // Aviso de 10 minutos (110 min após início)
                 const tempoDeEsperaMs = 110 * 60 * 1000; 
                 setTimeout(async () => {
                     const resFilaCheck = await axios.post(URL_GOOGLE_SCRIPT, { action: "verificarFila" });
