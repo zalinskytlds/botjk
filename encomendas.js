@@ -20,13 +20,13 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
     if (!URL) return console.error("ERRO: URL_GOOGLE_ENCOMENDAS não definida!");
 
     try {
-        // --- 1. COMANDO DE BAIXA DIRETA (Ex: "id 3") ---
+        // --- 1. COMANDO DE BAIXA DIRETA ---
         if (textoLow.startsWith("id ") && !sessoesEncomenda[jid]) {
-            const idBuscado = textoLow.replace(/\D/g, "").trim(); // Limpeza de segurança
+            const idBuscado = textoLow.replace(/\D/g, "").trim();
             if (!idBuscado) return sock.sendMessage(grupoId, { text: "❌ Informe o número do ID (Ex: id 2)" });
 
             sessoesEncomenda[jid] = { etapa: "pergunta_quem_recebeu", idParaBaixa: idBuscado };
-            return sock.sendMessage(grupoId, { text: `🤝 *ID ${idBuscado} localizado!* \n\nInforme quem está recebendo a encomenda agora? (Nome ou 'Vizinho')` });
+            return sock.sendMessage(grupoId, { text: `🤝 *ID ${idBuscado} localizado!* \n\nInforme quem está recebendo a encomenda agora?` });
         }
 
         // --- 2. MENU E VOLTAR ---
@@ -38,44 +38,50 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
         }
 
         // --- 3. LÓGICA DE REGISTRO ---
+        
+        // ETAPA: RECEBER DATA E FORMATAR COM ANO
         if (sessoesEncomenda[jid]?.etapa === "pergunta_data") {
-            sessoesEncomenda[jid].dataPrevista = textoRaw;
+            let dataDigitada = textoRaw;
+            
+            // Se o usuário digitar "20/04", o moment completa com o ano atual
+            // Se ele digitar "20/04/2026", ele mantém
+            const dataFormatada = moment(dataDigitada, "DD/MM", true).isValid() 
+                ? moment(dataDigitada, "DD/MM").format("DD/MM/YYYY") 
+                : dataDigitada;
+
+            sessoesEncomenda[jid].dataPrevista = dataFormatada;
+            sessoesEncomenda[jid].etapa = "pergunta_lo_ja"; // Corrigido para bater com a próxima etapa
             sessoesEncomenda[jid].etapa = "pergunta_loja";
             return sock.sendMessage(grupoId, { text: "🛍️ De onde é a encomenda? (Ex: Amazon, Shopee):" });
         }
+
         if (sessoesEncomenda[jid]?.etapa === "pergunta_loja") {
             sessoesEncomenda[jid].loja = textoRaw;
             sessoesEncomenda[jid].etapa = "pergunta_nome";
             return sock.sendMessage(grupoId, { text: "👤 Informe o seu nome:" });
         }
 
-        // --- BLOCO ATUALIZADO: PERGUNTA NOME + CONFIRMAÇÃO ---
         if (sessoesEncomenda[jid]?.etapa === "pergunta_nome") {
             const dados = sessoesEncomenda[jid];
             const nomeInquilino = textoRaw.toUpperCase();
 
             await axios.post(URL, { 
                 action: "registrar", 
-                dataPrevista: dados.dataPrevista, 
+                dataPrevista: dados.dataPrevista, // Aqui já vai com o ano (Ex: 20/04/2026)
                 loja: dados.loja, 
                 nome: nomeInquilino, 
                 usuario: jid 
             });
 
-            // Mensagem personalizada com menção e detalhes
             const mensagemConfirmacao = `✅ Ok, *${nomeInquilino}* (@${jid.split("@")[0]}), sua compra da *${dados.loja}* com previsão para *${dados.dataPrevista}* foi anotada!\n\n🔔 Fique atento(a) para registrar o recebimento aqui no grupo quando chegar.`;
 
             delete sessoesEncomenda[jid];
-
-            return sock.sendMessage(grupoId, { 
-                text: mensagemConfirmacao, 
-                mentions: [jid] 
-            });
+            return sock.sendMessage(grupoId, { text: mensagemConfirmacao, mentions: [jid] });
         }
 
         // --- 4. LÓGICA DE RECEBIMENTO ---
         if (sessoesEncomenda[jid]?.etapa === "pergunta_id_baixa") {
-            const idLimpo = textoRaw.replace(/\D/g, "").trim(); // Limpeza de segurança
+            const idLimpo = textoRaw.replace(/\D/g, "").trim();
             sessoesEncomenda[jid].idParaBaixa = idLimpo;
             sessoesEncomenda[jid].etapa = "pergunta_quem_recebeu";
             return sock.sendMessage(grupoId, { text: `🤝 Entendido. E quem está recebendo a encomenda do ID ${idLimpo}?` });
@@ -108,7 +114,6 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
             case "1":
                 sessoesEncomenda[jid] = { etapa: "pergunta_data" };
                 return sock.sendMessage(grupoId, { text: "📅 Qual a data prevista? (Ex: 10/04)" });
-
             case "2": {
                 const resCons = await axios.post(URL, { action: "consultar" });
                 const lista = resCons.data.lista || [];
@@ -117,28 +122,25 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
                 lista.forEach(r => msgLista += `🆔 *ID:* ${r[0]} | 👤 ${r[3]} (${r[2]})\n`);
                 return sock.sendMessage(grupoId, { text: msgLista });
             }
-
             case "3": {
                 const resBaixa = await axios.post(URL, { action: "consultar" });
                 const listaB = resBaixa.data.lista || [];
                 if (listaB.length === 0) return sock.sendMessage(grupoId, { text: "📭 Nada para receber." });
                 sessoesEncomenda[jid] = { etapa: "pergunta_id_baixa" };
-                let msgBaixa = "📦 *CONFIRMAR RECEBIMENTO*\nDigite apenas o número do ID:\n\n";
+                let msgBaixa = "📦 *CONFIRMAR RECEBIMENTO*\nDigite o número do ID:\n\n";
                 listaB.forEach(r => msgBaixa += `🆔 *ID ${r[0]}* - ${r[3]}\n`);
                 return sock.sendMessage(grupoId, { text: msgBaixa });
             }
-
             case "4": {
                 const resHist = await axios.post(URL, { action: "historico" });
                 const listaH = resHist.data.lista || [];
-                if (listaH.length === 0) return sock.sendMessage(grupoId, { text: "📜 Histórico vazio." });
-                let msgHist = "📜 *ÚLTIMAS ENTREGAS:*\n\n";
-                listaH.forEach(r => msgHist += `✅ *ID ${r[0]}:* ${r[3]} | Chegou: ${r[6]}\n`);
+                let msgHist = listaH.length ? "📜 *ÚLTIMAS ENTREGAS:*\n\n" : "📜 Histórico vazio.";
+                listaH.forEach(r => msgHist += `✅ *ID ${r[0]}:* ${r[3]} | ${r[6]}\n`);
                 return sock.sendMessage(grupoId, { text: msgHist });
             }
         }
     } catch (error) {
-        return sock.sendMessage(grupoId, { text: "❌ Sistema temporariamente indisponível." });
+        return sock.sendMessage(grupoId, { text: "❌ Erro no sistema." });
     }
 }
 
@@ -147,12 +149,9 @@ export function configurarEventosEncomendas(sock) {
         const idGrupo = num.id;
         const participante = num.participants[0];
         const saudacao = obterSaudacao();
-
         if (num.action === 'add') {
-            const boasVindas = `📦 ${saudacao}! Seja bem-vindo(a) à **JK Universitário** @${participante.split('@')[0]}!\n\n` +
-                               `Este é o nosso canal para **Encomendas**. Use o comando *Menu* para começar! 🚀`;
+            const boasVindas = `📦 ${saudacao}! Bem-vindo(a) @${participante.split('@')[0]}! Use *Menu* para gerenciar suas encomendas. 🚀`;
             await sock.sendMessage(idGrupo, { text: boasVindas, mentions: [participante] });
-            await axios.post(URL, { action: "log_evento", usuario: participante, evento: "ENTROU" }).catch(() => {});
         }
     });
 }
