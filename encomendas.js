@@ -36,9 +36,7 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
             return sock.sendMessage(grupoId, { text: menu });
         }
 
-        // --- 3. LÓGICA DE REGISTRO E RECEBIMENTO (ETAPAS) ---
-        
-        // Etapas de Registro (Opção 1)
+        // --- 3. LÓGICA DE REGISTRO (OPÇÃO 1) ---
         if (sessoesEncomenda[jid]?.etapa === "pergunta_data") {
             sessoesEncomenda[jid].dataPrevista = textoRaw;
             sessoesEncomenda[jid].etapa = "pergunta_loja";
@@ -47,22 +45,27 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
         if (sessoesEncomenda[jid]?.etapa === "pergunta_loja") {
             sessoesEncomenda[jid].loja = textoRaw;
             sessoesEncomenda[jid].etapa = "pergunta_nome";
-            return sock.sendMessage(grupoId, { text: "👤 Informe o nome do inquilino (Dono da encomenda):" });
+            return sock.sendMessage(grupoId, { text: "👤 Informe o seu nome:" });
         }
         if (sessoesEncomenda[jid]?.etapa === "pergunta_nome") {
             const dados = sessoesEncomenda[jid];
+            const nomeInquilino = textoRaw.toUpperCase();
+
             await axios.post(URL, { 
                 action: "registrar", 
                 dataPrevista: dados.dataPrevista, 
                 loja: dados.loja, 
-                nome: textoRaw.toUpperCase(), 
+                nome: nomeInquilino, 
                 usuario: jid 
             });
+
+            const mensagemConfirmacao = `✅ Ok, *${nomeInquilino}* (@${jid.split("@")[0]}), sua compra da *${dados.loja}* com previsão para *${dados.dataPrevista}* foi anotada!\n\n🔔 Fique atento(a) para registrar o recebimento aqui no grupo quando chegar.`;
+            
             delete sessoesEncomenda[jid];
-            return sock.sendMessage(grupoId, { text: `✅ Previsão para *${textoRaw.toUpperCase()}* anotada com sucesso!` });
+            return sock.sendMessage(grupoId, { text: mensagemConfirmacao, mentions: [jid] });
         }
 
-        // Etapa de Recebimento (Opção 3 / ID Direto)
+        // --- 4. LÓGICA DE RECEBIMENTO (OPÇÃO 3) ---
         if (sessoesEncomenda[jid]?.etapa === "pergunta_id_baixa") {
             sessoesEncomenda[jid].idParaBaixa = textoRaw.trim();
             sessoesEncomenda[jid].etapa = "pergunta_quem_recebeu";
@@ -91,7 +94,7 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
             }
         }
 
-        // --- 4. OPÇÕES DO MENU ---
+        // --- 5. OPÇÕES DO MENU ---
         switch (textoLow) {
             case "1":
                 sessoesEncomenda[jid] = { etapa: "pergunta_data" };
@@ -136,7 +139,6 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
     }
 }
 
-// --- MONITOR DE PARTICIPANTES ---
 export function configurarEventosEncomendas(sock) {
     sock.ev.on('group-participants.update', async (num) => {
         const idGrupo = num.id;
@@ -147,7 +149,7 @@ export function configurarEventosEncomendas(sock) {
             const boasVindas = `📦 ${saudacao}! Seja bem-vindo(a) à **JK Universitário** @${participante.split('@')[0]}!\n\n` +
                                `Este é o nosso canal oficial para **Encomendas e Avisos Gerais**. 📢\n\n` +
                                `• *Encomendas:* Registre suas previsões e avisaremos quando chegarem!\n` +
-                               `• *Comunicados:* Acompanhe avisos de manutenção e coleta de lixo.\n\n` +
+                               `• *Comunicados:* Acompanhe avisos importantes.\n\n` +
                                `Use o comando *Menu* para começar! 🚀`;
             
             await sock.sendMessage(idGrupo, { text: boasVindas, mentions: [participante] });
