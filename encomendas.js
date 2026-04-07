@@ -48,6 +48,8 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
             sessoesEncomenda[jid].etapa = "pergunta_nome";
             return sock.sendMessage(grupoId, { text: "👤 Informe o seu nome:" });
         }
+
+        // --- BLOCO ATUALIZADO: PERGUNTA NOME + CONFIRMAÇÃO ---
         if (sessoesEncomenda[jid]?.etapa === "pergunta_nome") {
             const dados = sessoesEncomenda[jid];
             const nomeInquilino = textoRaw.toUpperCase();
@@ -60,10 +62,15 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
                 usuario: jid 
             });
 
+            // Mensagem personalizada com menção e detalhes
             const mensagemConfirmacao = `✅ Ok, *${nomeInquilino}* (@${jid.split("@")[0]}), sua compra da *${dados.loja}* com previsão para *${dados.dataPrevista}* foi anotada!\n\n🔔 Fique atento(a) para registrar o recebimento aqui no grupo quando chegar.`;
-            
+
             delete sessoesEncomenda[jid];
-            return sock.sendMessage(grupoId, { text: mensagemConfirmacao, mentions: [jid] });
+
+            return sock.sendMessage(grupoId, { 
+                text: mensagemConfirmacao, 
+                mentions: [jid] 
+            });
         }
 
         // --- 4. LÓGICA DE RECEBIMENTO ---
