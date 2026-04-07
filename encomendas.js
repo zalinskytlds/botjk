@@ -115,13 +115,28 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
                 sessoesEncomenda[jid] = { etapa: "pergunta_data" };
                 return sock.sendMessage(grupoId, { text: "📅 Qual a data prevista? (Ex: 10/04)" });
             case "2": {
-                const resCons = await axios.post(URL, { action: "consultar" });
-                const lista = resCons.data.lista || [];
-                if (lista.length === 0) return sock.sendMessage(grupoId, { text: "📭 Não há encomendas aguardando." });
-                let msgLista = "🔍 *ENCOMENDAS AGUARDANDO:*\n\n";
-                lista.forEach(r => msgLista += `🆔 *ID:* ${r[0]} | 👤 ${r[3]} (${r[2]})\n`);
-                return sock.sendMessage(grupoId, { text: msgLista });
-            }
+    const resCons = await axios.post(URL, { action: "consultar" });
+    const lista = resCons.data.lista || [];
+    
+    if (lista.length === 0) {
+        return sock.sendMessage(grupoId, { text: "📭 *Não há encomendas aguardando no momento.*" });
+    }
+
+    let msgLista = "🔍 *ENCOMENDAS AGUARDANDO:*\n";
+    msgLista += "__________________________\n\n";
+
+    lista.forEach(r => {
+        // r[0] = ID, r[1] = Data, r[2] = Loja, r[3] = Nome
+        msgLista += `🆔 *ID: ${r[0]}*\n`;
+        msgLista += `👤 *NOME:* ${r[3]}\n`;
+        msgLista += `🛍️ *LOJA:* ${r[2]}\n`;
+        msgLista += `📅 *CHEGA EM:* ${r[1]}\n`; // <--- Aqui mostra a data
+        msgLista += "__________________________\n\n";
+    });
+
+    msgLista += "_Para dar baixa, digite: ID [número]_";
+    return sock.sendMessage(grupoId, { text: msgLista });
+}
             case "3": {
                 const resBaixa = await axios.post(URL, { action: "consultar" });
                 const listaB = resBaixa.data.lista || [];
@@ -131,18 +146,31 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
                 listaB.forEach(r => msgBaixa += `🆔 *ID ${r[0]}* - ${r[3]}\n`);
                 return sock.sendMessage(grupoId, { text: msgBaixa });
             }
-            case "4": {
+           case "4": {
                 const resHist = await axios.post(URL, { action: "historico" });
                 const listaH = resHist.data.lista || [];
-                let msgHist = listaH.length ? "📜 *ÚLTIMAS ENTREGAS:*\n\n" : "📜 Histórico vazio.";
-                listaH.forEach(r => msgHist += `✅ *ID ${r[0]}:* ${r[3]} | ${r[6]}\n`);
+
+                if (listaH.length === 0) {
+                    return sock.sendMessage(grupoId, { text: "📜 *O histórico de entregas está vazio.*" });
+                }
+
+                let msgHist = "📜 *ÚLTIMAS ENTREGAS REALIZADAS*\n";
+                msgHist += "__________________________\n\n";
+
+                listaH.slice(-10).reverse().forEach(r => {
+                    msgHist += `✅ *ID ${r[0]}* | ${r[3]}\n`;
+                    msgHist += `📦 *ORIGEM:* ${r[2].toUpperCase()}\n`; 
+                    msgHist += `🏁 *ENTREGUE EM:* ${r[6]}\n`;
+                    msgHist += "__________________________\n\n";
+                });
+
                 return sock.sendMessage(grupoId, { text: msgHist });
             }
-        }
-    } catch (error) {
-        return sock.sendMessage(grupoId, { text: "❌ Erro no sistema." });
+        } // Fim do switch
+    } catch (error) { // Fim do try
+        return sock.sendMessage(grupoId, { text: "❌ Sistema temporariamente indisponível." });
     }
-}
+} // Fim da função tratarMensagemEncomendas
 
 export function configurarEventosEncomendas(sock) {
     sock.ev.on('group-participants.update', async (num) => {
