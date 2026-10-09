@@ -25,10 +25,16 @@ const obterSaudacao = () => {
     return "Boa noite";
 };
 
-// Função auxiliar para chamar o Gemini com suporte à SDK nova e logs detalhados
+// Função auxiliar ultra robusta com logs detalhados para a API do Gemini
 async function gerarRespostaGemini(promptUsuario) {
     try {
-        console.log("🤖 [GEMINI] A iniciar chamada para o modelo...");
+        console.log("🤖 [GEMINI] A iniciar chamada para o modelo gemini-2.5-flash...");
+        
+        if (!process.env.GEMINI_API_KEY) {
+            console.error("❌ [GEMINI] ERRO: A variável GEMINI_API_KEY não está definida no Render!");
+            return null;
+        }
+
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: promptUsuario,
@@ -38,8 +44,9 @@ async function gerarRespostaGemini(promptUsuario) {
             }
         });
         
-        console.log("🤖 [GEMINI] Resposta bruta recebida com sucesso!");
+        console.log("🤖 [GEMINI] Resposta recebida da API com sucesso!");
 
+        // Tenta extrair o texto de diferentes formatos possíveis da SDK
         if (response && response.text) {
             return response.text.trim();
         }
@@ -48,15 +55,24 @@ async function gerarRespostaGemini(promptUsuario) {
             return response.candidates[0].content.parts[0].text.trim();
         }
 
+        console.warn("⚠️ [GEMINI] A resposta veio vazia ou em formato inesperado:", JSON.stringify(response));
         return null;
+
     } catch (error) {
-        console.error("❌ [GEMINI] Erro crítico na API:", error.message || error);
+        console.error("❌ [GEMINI] ERRO DETALHADO NA API DO GEMINI:");
+        console.error("Mensagem:", error.message);
+        if (error.status) console.error("Status HTTP:", error.status);
+        if (error.errorDetails) console.error("Detalhes:", JSON.stringify(error.errorDetails));
         return null;
     }
 }
 
 export async function tratarMensagemLavanderia(sock, msg, grupoId) {
-    const texto = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim().toLowerCase();
+    // Validação de segurança para garantir que é uma mensagem de texto válida
+    const textoMensagem = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
+    if (!textoMensagem) return;
+
+    const texto = textoMensagem.trim().toLowerCase();
     const remetente = msg.key?.participant || msg.key?.remoteJid || "";
     const nomeMorador = msg.pushName || "Morador Desconhecido";
 
