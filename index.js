@@ -80,7 +80,7 @@ async function conectarWhatsApp() {
         
         const jid = msg.key.remoteJid;
 
-        // 🛡️ PROTEÇÃO: Ignora mensagens LID ou chats que não sejam mensagens válidas de texto/grupo para evitar crashes
+        // 🛡️ PROTEÇÃO: Ignora mensagens LID ou chats que não sejam mensagens válidas
         if (!jid || jid.includes('@lid')) return;
 
         const textoChat = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim().toLowerCase();
@@ -96,11 +96,14 @@ async function conectarWhatsApp() {
         try {
             if (textoChat === "teste") return await sock.sendMessage(jid, { text: "Teste realizado com sucesso! 😎" });
 
-            // Aceita se estiver na lista ou de forma flexível em qualquer grupo (@g.us) para testes de IA
-            if (listaLavanderia.has(jid) || jid.endsWith("@g.us")) {
+            // 🧺 MÓDULO LAVANDERIA: Apenas nos grupos estritos da lista GRUPOS_LAVANDERIA
+            if (listaLavanderia.has(jid)) {
                 console.log("🧺 [LAVANDERIA] Encaminhando mensagem para o módulo...");
                 await tratarMensagemLavanderia(sock, msg, jid);
-            } else if (listaEncomendas.has(jid)) {
+            } 
+            // 📦 MÓDULO ENCOMENDAS: Apenas nos grupos estritos da lista GRUPOS_ENCOMENDAS
+            else if (listaEncomendas.has(jid)) {
+                console.log("📦 [ENCOMENDAS] Encaminhando mensagem para o módulo...");
                 await tratarMensagemEncomendas(sock, msg, jid);
             } else {
                 console.log(`⚠️ [AVISO] O grupo ${jid} não está cadastrado nas listas.`);

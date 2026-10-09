@@ -25,6 +25,22 @@ const obterSaudacao = () => {
     return "Boa noite";
 };
 
+// Função auxiliar para enviar logs de erro para a planilha na aba "Logdeerros"
+async function enviarLogErro(erroMsg, usuario = "Desconhecido", detalhes = "") {
+    try {
+        if (!URL_GOOGLE_SCRIPT) return;
+        await axios.post(URL_GOOGLE_SCRIPT, {
+            action: "log_erro",
+            modulo: "lavanderia",
+            usuario: usuario,
+            erro: erroMsg,
+            detalhes: detalhes
+        });
+    } catch (e) {
+        console.error("❌ Falha ao gravar log de erro na planilha:", e.message);
+    }
+}
+
 // Função auxiliar atualizada para garantir compatibilidade total com a SDK do Gemini
 async function gerarRespostaGemini(promptUsuario) {
     try {
@@ -54,6 +70,7 @@ async function gerarRespostaGemini(promptUsuario) {
         return null;
     } catch (error) {
         console.error("❌ [GEMINI] Erro detalhado na chamada:", error.message || error);
+        await enviarLogErro(error.message || String(error), "Sistema (Gemini)", "Erro ao gerar resposta com o Gemini no módulo de lavanderia");
         return null;
     }
 }
@@ -208,6 +225,7 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
         }
     } catch (err) { 
         console.log("❌ Erro geral no módulo:", err.message); 
+        await enviarLogErro(err.message || String(err), remetente, `Erro ao processar mensagem de texto: "${textoMensagem}"`);
     }
 }
 
