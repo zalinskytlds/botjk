@@ -25,13 +25,13 @@ const obterSaudacao = () => {
     return "Boa noite";
 };
 
-// Função auxiliar ultra robusta com logs detalhados para a API do Gemini
+// Função auxiliar com logs ultra detalhados para diagnosticar qualquer falha na API do Gemini
 async function gerarRespostaGemini(promptUsuario) {
     try {
         console.log("🤖 [GEMINI] A iniciar chamada para o modelo gemini-2.5-flash...");
         
         if (!process.env.GEMINI_API_KEY) {
-            console.error("❌ [GEMINI] ERRO: A variável GEMINI_API_KEY não está definida no Render!");
+            console.error("❌ [GEMINI] ERRO CRÍTICO: A variável GEMINI_API_KEY não está configurada no Render!");
             return null;
         }
 
@@ -44,9 +44,9 @@ async function gerarRespostaGemini(promptUsuario) {
             }
         });
         
-        console.log("🤖 [GEMINI] Resposta recebida da API com sucesso!");
+        console.log("🤖 [GEMINI] Resposta bruta recebida com sucesso da API!");
 
-        // Tenta extrair o texto de diferentes formatos possíveis da SDK
+        // Valida e extrai o texto dependendo do formato de retorno da SDK
         if (response && response.text) {
             return response.text.trim();
         }
@@ -60,7 +60,7 @@ async function gerarRespostaGemini(promptUsuario) {
 
     } catch (error) {
         console.error("❌ [GEMINI] ERRO DETALHADO NA API DO GEMINI:");
-        console.error("Mensagem:", error.message);
+        console.error("Mensagem:", error.message || error);
         if (error.status) console.error("Status HTTP:", error.status);
         if (error.errorDetails) console.error("Detalhes:", JSON.stringify(error.errorDetails));
         return null;
@@ -68,7 +68,6 @@ async function gerarRespostaGemini(promptUsuario) {
 }
 
 export async function tratarMensagemLavanderia(sock, msg, grupoId) {
-    // Validação de segurança para garantir que é uma mensagem de texto válida
     const textoMensagem = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
     if (!textoMensagem) return;
 
