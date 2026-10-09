@@ -28,7 +28,7 @@ const obterSaudacao = () => {
 // Função auxiliar para chamar o Gemini
 async function gerarRespostaGemini(promptUsuario) {
     try {
-        console.log("🤖 Enviando prompt para o Gemini...");
+        console.log("🤖 [GEMINI] A iniciar chamada para o modelo...");
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: promptUsuario,
@@ -37,45 +37,25 @@ async function gerarRespostaGemini(promptUsuario) {
                 maxOutputTokens: 350,
             }
         });
-        console.log("🤖 Resposta recebida do Gemini com sucesso!");
-        return response.text ? response.text.trim() : null;
+        
+        // Log para inspecionar o retorno bruto no Render
+        console.log("🤖 [GEMINI] Resposta bruta recebida:", JSON.stringify(response));
+
+        if (response && response.text) {
+            return response.text.trim();
+        }
+        
+        // Fallback caso a propriedade venha em outro formato na SDK nova
+        if (response && response.candidates?.[0]?.content?.parts?.[0]?.text) {
+            return response.candidates[0].content.parts[0].text.trim();
+        }
+
+        return null;
     } catch (error) {
-        console.error("❌ Erro detalhado no Gemini:", error.message || error);
+        console.error("❌ [GEMINI] Erro crítico na API:", error.message || error);
         return null;
     }
 }
-
-export async function tratarMensagemLavanderia(sock, msg, grupoId) {
-    const texto = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim().toLowerCase();
-    const remetente = msg.key?.participant || msg.key?.remoteJid || "";
-    const nomeMorador = msg.pushName || "Morador Desconhecido";
-
-    try {
-        const response = await axios.get(URL_GOOGLE_SCRIPT);
-        const data = Array.isArray(response.data) ? response.data : [];
-        const registroAtivo = data.find(r => r.status === "em_uso");
-        const filaEspera = data.filter(r => r.status === "na_fila");
-
-        switch (texto) {
-            case "menu": case "oi": case "11": {
-                const saudacao = obterSaudacao();
-                const menu = `👋 ${saudacao}!\n\n🧺 *LAVANDERIA JK*\n\n1️⃣ Dicas de uso 🧼\n2️⃣ Info da maquina ⚙️\n3️⃣ Iniciar Lavagem 🚿\n4️⃣ Finalizar Lavagem ✅\n5️⃣ Entrar na Fila ⏳\n6️⃣ Sair da Fila 🚶‍♂️\n7️⃣ Calcular peso das roupas 🎲\n8️⃣ Horário de funcionamento ⏰\n9️⃣ Previsão do tempo 🌦️\n🔟 Coleta de Lixo 🗑️`;
-                return sock.sendMessage(grupoId, { text: menu });
-            }
-
-            case "1": {
-                const prompt = "Gere 4 dicas criativas e essenciais de preservação e uso para moradores que usam uma máquina de lavar coletiva (ex: cuidar com bolsos, avesso, quantidade de sabão líquido, deixar tampa aberta). Formate com emojis e tópicos claros.";
-                let dicas = await gerarRespostaGemini(prompt);
-                if (!dicas) dicas = "🧼 *Dica:* Verifique sempre os bolsos e use apenas sabão líquido!";
-                return sock.sendMessage(grupoId, { text: `💡 *DICAS DE USO INTELIGENTES - JK*\n\n${dicas}\n\n_Preserve o que é de todos!_ 🤝` });
-            }
-
-            case "2": {
-                const promptInfo = "Explique de forma organizada as especificações técnicas da lavanderia: máquina Electrolux de 8,5kg, limite estrito de 2 horas de uso por morador, proibição absoluta de sabão em pó (apenas líquido até a marca MAX), e alerta sobre danos ao motor.";
-                let info = await gerarRespostaGemini(promptInfo);
-                if (!info) info = "⚙️ *Especificações:* Electrolux 8,5kg. Proibido sabão em pó. Limite de 2 horas.";
-                return sock.sendMessage(grupoId, { text: `⚙️ *ESPECIFICAÇÕES E REGRAS*\n\n${info}\n\n*Respeite o tempo do próximo morador!* 🤝` });
-            }
 
             case "3": {
                 if (registroAtivo) {
