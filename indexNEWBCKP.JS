@@ -57,7 +57,9 @@ async function conectarWhatsApp() {
     });
 
     // --- CONFIGURAÇÃO DE EVENTOS DE GRUPO (ENTRADA/SAÍDA) ---
+    // Ativa para o grupo de Lavanderia
     eventosLavanderia(sock);
+    // Ativa para o grupo de Encomendas (já preparado para quando criarmos a função)
     configurarEventosEncomendas(sock);
 
     sock.ev.on("connection.update", (update) => {
@@ -74,7 +76,8 @@ async function conectarWhatsApp() {
 
     sock.ev.on("creds.update", saveCreds);
 
-    sock.ev.on("messages.upsert", async ({ messages }) => {
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+        if (type !== "notify") return;
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
         
@@ -84,23 +87,15 @@ async function conectarWhatsApp() {
         const listaLavanderia = obterGrupos("GRUPOS_LAVANDERIA");
         const listaEncomendas = obterGrupos("GRUPOS_ENCOMENDAS");
 
-        console.log(`📩 [MENSAGEM RECEBIDA] De: ${jid} | Texto: "${textoChat}"`);
-
         try {
             if (textoChat === "teste") return await sock.sendMessage(jid, { text: "Teste realizado com sucesso! 😎" });
 
-            // Aceita se estiver na lista ou de forma flexível em qualquer grupo (@g.us) para testes de IA
-            if (listaLavanderia.has(jid) || jid.endsWith("@g.us")) {
-                console.log("🧺 [LAVANDERIA] Encaminhando mensagem para o módulo...");
+            if (listaLavanderia.has(jid)) {
                 await tratarMensagemLavanderia(sock, msg, jid);
             } else if (listaEncomendas.has(jid)) {
                 await tratarMensagemEncomendas(sock, msg, jid);
-            } else {
-                console.log(`⚠️ [AVISO] O grupo ${jid} não está cadastrado nas listas.`);
             }
-        } catch (err) { 
-            console.error("❌ Erro no processamento da mensagem:", err); 
-        }
+        } catch (err) { console.error("❌ Erro:", err); }
     });
 }
 
