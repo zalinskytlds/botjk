@@ -79,7 +79,14 @@ async function conectarWhatsApp() {
         if (!msg.message || msg.key.fromMe) return;
         
         const jid = msg.key.remoteJid;
+
+        // 🛡️ PROTEÇÃO: Ignora mensagens LID ou chats que não sejam mensagens válidas de texto/grupo para evitar crashes
+        if (!jid || jid.includes('@lid')) return;
+
         const textoChat = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim().toLowerCase();
+        
+        // Ignora se a mensagem veio sem nenhum texto
+        if (!textoChat) return;
 
         const listaLavanderia = obterGrupos("GRUPOS_LAVANDERIA");
         const listaEncomendas = obterGrupos("GRUPOS_ENCOMENDAS");
