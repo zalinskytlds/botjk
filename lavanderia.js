@@ -25,44 +25,35 @@ const obterSaudacao = () => {
     return "Boa noite";
 };
 
-// Função auxiliar com logs ultra detalhados para diagnosticar qualquer falha na API do Gemini
+// Função auxiliar atualizada para garantir compatibilidade total com a SDK do Gemini
 async function gerarRespostaGemini(promptUsuario) {
     try {
-        console.log("🤖 [GEMINI] A iniciar chamada para o modelo gemini-2.5-flash...");
+        console.log("🤖 [GEMINI] A iniciar chamada para o modelo gemini-1.5-flash...");
         
         if (!process.env.GEMINI_API_KEY) {
-            console.error("❌ [GEMINI] ERRO CRÍTICO: A variável GEMINI_API_KEY não está configurada no Render!");
+            console.error("❌ [GEMINI] ERRO: A variável GEMINI_API_KEY não está definida no Render!");
             return null;
         }
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: promptUsuario,
-            config: {
-                systemInstruction: SISTEMA_BASE_JK,
-                maxOutputTokens: 350,
-            }
+            model: 'gemini-1.5-flash',
+            contents: [
+                {
+                    role: 'user',
+                    parts: [{ text: `${SISTEMA_BASE_JK}\n\nInstrução ou Pergunta do Morador: ${promptUsuario}` }]
+                }
+            ]
         });
         
-        console.log("🤖 [GEMINI] Resposta bruta recebida com sucesso da API!");
+        console.log("🤖 [GEMINI] Resposta gerada com sucesso!");
 
-        // Valida e extrai o texto dependendo do formato de retorno da SDK
         if (response && response.text) {
             return response.text.trim();
         }
-        
-        if (response && response.candidates?.[0]?.content?.parts?.[0]?.text) {
-            return response.candidates[0].content.parts[0].text.trim();
-        }
 
-        console.warn("⚠️ [GEMINI] A resposta veio vazia ou em formato inesperado:", JSON.stringify(response));
         return null;
-
     } catch (error) {
-        console.error("❌ [GEMINI] ERRO DETALHADO NA API DO GEMINI:");
-        console.error("Mensagem:", error.message || error);
-        if (error.status) console.error("Status HTTP:", error.status);
-        if (error.errorDetails) console.error("Detalhes:", JSON.stringify(error.errorDetails));
+        console.error("❌ [GEMINI] Erro detalhado na chamada:", error.message || error);
         return null;
     }
 }
