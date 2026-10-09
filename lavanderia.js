@@ -6,8 +6,8 @@ const URL_GOOGLE_SCRIPT = process.env.URL_GOOGLE_LAVANDERIA;
 const HG_API_KEY = process.env.HGBR_API_KEY; 
 const TIMEZONE = "America/Sao_Paulo";
 
-// Inicializa o Gemini buscando automaticamente a GEMINI_API_KEY do Render
-const ai = new GoogleGenAI();
+// Inicializa o Gemini passando explicitamente a chave do ambiente do Render
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SISTEMA_BASE_JK = `Você é o assistente virtual inteligente e amigável da lavanderia da Pousada JK em Viamão/RS. 
 Diretrizes e regras que você DEVE respeitar e transmitir:
@@ -25,9 +25,10 @@ const obterSaudacao = () => {
     return "Boa noite";
 };
 
-// Função auxiliar para interagir com o Gemini de graça
+// Função auxiliar atualizada para chamar o Gemini com logs de erro visíveis
 async function gerarRespostaGemini(promptUsuario) {
     try {
+        console.log("🤖 Enviando prompt para o Gemini...");
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: promptUsuario,
@@ -36,9 +37,10 @@ async function gerarRespostaGemini(promptUsuario) {
                 maxOutputTokens: 350,
             }
         });
+        console.log("🤖 Resposta recebida do Gemini com sucesso!");
         return response.text ? response.text.trim() : null;
     } catch (error) {
-        console.error("Erro no Gemini:", error.message);
+        console.error("❌ Erro detalhado no Gemini:", error.message || error);
         return null;
     }
 }
@@ -64,9 +66,7 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
             case "1": {
                 const prompt = "Gere 4 dicas criativas e essenciais de preservação e uso para moradores que usam uma máquina de lavar coletiva (ex: cuidar com bolsos, avesso, quantidade de sabão líquido, deixar tampa aberta). Formate com emojis e tópicos claros.";
                 let dicas = await gerarRespostaGemini(prompt);
-                if (!dicas) {
-                    dicas = "🧼 *Dica:* Verifique sempre os bolsos e use apenas sabão líquido!";
-                }
+                if (!dicas) dicas = "🧼 *Dica:* Verifique sempre os bolsos e use apenas sabão líquido!";
                 return sock.sendMessage(grupoId, { text: `💡 *DICAS DE USO INTELIGENTES - JK*\n\n${dicas}\n\n_Preserve o que é de todos!_ 🤝` });
             }
 
@@ -181,6 +181,7 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
             }
 
             default: {
+                // Captura qualquer texto livre digitado no grupo e joga para o Gemini responder
                 const respostaLivre = await gerarRespostaGemini(`O morador ${nomeMorador} disse: "${texto}". Responda à dúvida dele relacionada à lavanderia ou regras da Pousada JK.`);
                 if (respostaLivre) {
                     return sock.sendMessage(grupoId, { text: respostaLivre });
@@ -189,7 +190,7 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
             }
         }
     } catch (err) { 
-        console.log("❌ Erro:", err.message); 
+        console.log("❌ Erro geral no módulo:", err.message); 
     }
 }
 
