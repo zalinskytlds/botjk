@@ -6,7 +6,7 @@ const URL_GOOGLE_SCRIPT = process.env.URL_GOOGLE_LAVANDERIA;
 const HG_API_KEY = process.env.HGBR_API_KEY; 
 const TIMEZONE = "America/Sao_Paulo";
 
-// Inicializa o Gemini passando explicitamente a chave do ambiente do Render
+// Inicializa o Gemini buscando a chave do ambiente configurada no Render
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SISTEMA_BASE_JK = `Você é o assistente virtual inteligente e amigável da lavanderia da Pousada JK em Viamão/RS. 
@@ -25,7 +25,7 @@ const obterSaudacao = () => {
     return "Boa noite";
 };
 
-// Função auxiliar atualizada para chamar o Gemini com logs de erro visíveis
+// Função auxiliar para chamar o Gemini
 async function gerarRespostaGemini(promptUsuario) {
     try {
         console.log("🤖 Enviando prompt para o Gemini...");
@@ -181,7 +181,6 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
             }
 
             default: {
-                // Captura qualquer texto livre digitado no grupo e joga para o Gemini responder
                 const respostaLivre = await gerarRespostaGemini(`O morador ${nomeMorador} disse: "${texto}". Responda à dúvida dele relacionada à lavanderia ou regras da Pousada JK.`);
                 if (respostaLivre) {
                     return sock.sendMessage(grupoId, { text: respostaLivre });
