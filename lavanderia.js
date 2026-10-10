@@ -10,13 +10,15 @@ const TIMEZONE = "America/Sao_Paulo";
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SISTEMA_BASE_JK = `Você é o assistente virtual inteligente e amigável da lavanderia da Pousada JK em Viamão/RS. 
-Diretrizes e regras que você DEVE respeitar e transmitir:
-- Capacidade máxima da Electrolux: 8,5kg (cerca de 48 peças leves).
-- Proibido estritamente usar sabão em pó (causa corrosão e queima o motor). Apenas sabão líquido até a marca MAX.
-- Horário de funcionamento: Das 07:00 às 22:00 (último início às 20:00).
-- Tempo limite por uso: 2 horas (120 minutos).
-- Proibido lavar na máquina: Tênis, edredons de casal/queen, tapetes de borracha e travesseiros de espuma.
-- Mantenha um tom prestativo, comunitário, educado e use emojis de forma moderada.`;
+ATENÇÃO: Você DEVE seguir estritamente as regras abaixo. NUNCA invente informações, horários, limites de peso ou exceções que fujam destas diretrizes:
+- *O que pode ser lavado:* Somente roupas comuns do dia a dia e roupas leves de cama (respeitando rigorosamente o limite de peso).
+- *Proibição absoluta de peças pesadas:* É proibido lavar peças que exigem muito e sobrecarregam o motor, amortecedores e cesto, tais como: edredons em geral, tênis em geral, tapetes em geral, travesseiros em geral, cobertores em geral, bichos de pelúcia em geral.
+- *Outros itens que estragam a máquina:* Sutiãs com aro de metal (sem bolsa de proteção), roupas cheias de lama/areia, moedas/chaves esquecidas nos bolsos e roupas com fivelas metálicas pesadas.
+- *Capacidade máxima da Electrolux:* 8,5kg (cerca de 48 peças leves). O excesso de peso queima o motor e danifica os rolamentos.
+- *Regra de sabão:* Proibido estritamente usar sabão em pó (causa corrosão, entope compartimentos e queima o motor). Utilize apenas sabão líquido até a marca MAX.
+- *Horário de funcionamento:* Das 07:00 às 22:00 (último início às 20:00).
+- *Tempo limite por uso:* 2 horas (120 minutos).
+- *Tom e Abordagem:* Mantenha um tom prestativo, comunitário, educado e use emojis de forma moderada. Se um morador perguntar sobre itens proibidos, explique educadamente que eles danificam e exigem demais do motor e da estrutura da máquina coletiva.`;
 
 const obterSaudacao = () => {
     const hora = moment().tz(TIMEZONE).hour();
@@ -99,13 +101,15 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
             }
 
             case "1": {
-                const prompt = "Gere 4 dicas criativas e essenciais de preservação e uso para moradores que usam uma máquina de lavar coletiva (ex: cuidar com bolsos, avesso, quantidade de sabão líquido, deixar tampa aberta). Formate com emojis e tópicos claros.";
+                await sock.sendMessage(grupoId, { text: `⏳ A consultar a inteligência artificial... Por favor, aguarde, retorno com a resposta em até 2 minutos.` });
+                const prompt = "Gere 2 dicas criativas e essenciais de preservação e uso para moradores que usam uma máquina de lavar coletiva (ex: cuidar com bolsos, avesso, quantidade de sabão líquido, deixar tampa aberta). Formate com emojis e tópicos claros.";
                 let dicas = await gerarRespostaGemini(prompt);
                 if (!dicas) dicas = "🧼 *Dica:* Verifique sempre os bolsos e use apenas sabão líquido!";
                 return sock.sendMessage(grupoId, { text: `💡 *DICAS DE USO INTELIGENTES - JK*\n\n${dicas}\n\n_Preserve o que é de todos!_ 🤝` });
             }
 
             case "2": {
+                await sock.sendMessage(grupoId, { text: `⏳ A consultar as especificações... Por favor, aguarde, retorno com a resposta em até 2 minutos.` });
                 const promptInfo = "Explique de forma organizada as especificações técnicas da lavanderia: máquina Electrolux de 8,5kg, limite estrito de 2 horas de uso por morador, proibição absoluta de sabão em pó (apenas líquido até a marca MAX), e alerta sobre danos ao motor.";
                 let info = await gerarRespostaGemini(promptInfo);
                 if (!info) info = "⚙️ *Especificações:* Electrolux 8,5kg. Proibido sabão em pó. Limite de 2 horas.";
@@ -113,17 +117,23 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
             }
 
             case "3": {
+                const agoraSP = moment().tz(TIMEZONE);
+                if (agoraSP.hour() < 7 || agoraSP.hour() >= 20) {
+                    await sock.sendMessage(grupoId, { text: `⏳ A verificar as regras de horário... Por favor, aguarde.` });
+                    const promptForaHorario = `O morador ${nomeMorador} tentou iniciar uma lavagem às ${agoraSP.format("HH:mm")}, mas o horário de funcionamento é das 07:00 às 22:00, sendo 20:00 o último horário permitido para início. Escreva uma mensagem amigável explicando educadamente o motivo pelo qual não é possível iniciar a lavagem agora, mencionando o morador (@${remetente.split("@")[0]}).`;
+                    let msgIA = await gerarRespostaGemini(promptForaHorario);
+                    if (!msgIA) msgIA = `⚠️ @${remetente.split("@")[0]}, infelizmente não é possível iniciar a lavagem agora. A lavanderia funciona das 07:00 às 22:00, e o último horário para início é às 20:00, garantindo o silêncio e descanso de todos! 🤫`;
+                    return sock.sendMessage(grupoId, { text: msgIA, mentions: [remetente] });
+                }
+
                 if (registroAtivo) {
                     return sock.sendMessage(grupoId, { 
                         text: `⛔ *LAVANDERIA OCUPADA*\n\nUsuário: @${registroAtivo.usuario.split("@")[0]}\nPrevisão de término: *${registroAtivo.fim_previsto}*`, 
                         mentions: [registroAtivo.usuario] 
                     });
                 }
-                const agoraSP = moment().tz(TIMEZONE);
-                if (agoraSP.hour() < 7 || agoraSP.hour() >= 20) {
-                    return sock.sendMessage(grupoId, { text: `⚠️ *FORA DO HORÁRIO DE USO*\n\nA lavanderia funciona das *07:00 às 22:00*.\n\nÚltimo horário de início: *20:00*. Respeite o silêncio após as 22:00! 🤫` });
-                }
 
+                await sock.sendMessage(grupoId, { text: `⏳ A verificar o clima e iniciar o ciclo... Por favor, aguarde, retorno com a resposta em até 2 minutos.` });
                 let dicaClimaIA = "Lavagem iniciada com sucesso!";
                 try {
                     const resClima = await axios.get(`https://api.hgbrasil.com/weather?key=${HG_API_KEY}&city_name=Viamao,RS`);
@@ -142,8 +152,8 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                     `⏰ *Início:* ${agoraSP.format("HH:mm")} | 🏁 *Fim Previsto:* ${horaFimStr}\n\n` +
                     `🌦️ *Dica do Clima (Gemini):* ${dicaClimaIA}\n\n` +
                     `🚫 *ALERTAS IMPORTANTES:*\n` +
-                    `1️⃣ **SABÃO LÍQUIDO APENAS** (O pó danifica o motor).\n` +
-                    `2️⃣ **LIMITE DE 2 HORAS** para evitar retenção da máquina.\n\n` +
+                    `1️⃣ *SABÃO LÍQUIDO APENAS* (O pó danifica o motor).\n` +
+                    `2️⃣ *LIMITE DE 2 HORAS* para evitar retenção da máquina.\n\n` +
                     `_Você receberá um aviso antes do término!_ 🤝`;
 
                 return sock.sendMessage(grupoId, { text: msgSucesso, mentions: [remetente] });
@@ -151,6 +161,36 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
 
             case "4": {
                 if (!registroAtivo) return sock.sendMessage(grupoId, { text: "✅ A máquina já está livre e disponível para uso!" });
+                
+                let feedbackTempo = "";
+                try {
+                    if (registroAtivo.inicio) {
+                        const inicioUso = moment.tz(registroAtivo.inicio, TIMEZONE);
+                        const fimUso = moment().tz(TIMEZONE);
+                        const duracaoMinutos = fimUso.diff(inicioUso, 'minutes');
+
+                        const parabensVariacoes = [
+                            `\n\n🌟 *Excelente, @${remetente.split("@")[0]}!* Concluiu a lavagem em ${duracaoMinutos} min, respeitando o limite de 2h e colaborando com a comunidade! 🤝`,
+                            `\n\n👏 *Parabéns pela pontualidade, @${remetente.split("@")[0]}!* Terminou em ${duracaoMinutos} min. Exemplo de uso consciente! ✨`,
+                            `\n\n🎉 *Show de bola, @${remetente.split("@")[0]}!* Ciclo finalizado em ${duracaoMinutos} min dentro do prazo. A vizinhança agradece! 🧼`
+                        ];
+
+                        const corretivoVariacoes = [
+                            `\n\n⚠️ *Aviso amigável, @${remetente.split("@")[0]}:* Você levou ${duracaoMinutos} min (${(duracaoMinutos/60).toFixed(1)}h), ultrapassando as 2h recomendadas. Fique de olho no relógio na próxima para não reter a máquina! ⏰`,
+                            `\n\n💡 *Oi, @${remetente.split("@")[0]}:* O ciclo durou ${duracaoMinutos} min e passou um pouco das 2h estipuladas. Pedimos atenção para liberar o equipamento a quem está na fila! 🤝`,
+                            `\n\n⚠️ *Atenção ao tempo, @${remetente.split("@")[0]}:* Foram ${duracaoMinutos} min de uso. Lembre-se que o limite é de 2h para manter a harmonia na lavanderia! ⏱️`
+                        ];
+
+                        if (duracaoMinutos <= 120) {
+                            feedbackTempo = parabensVariacoes[Math.floor(Math.random() * parabensVariacoes.length)];
+                        } else {
+                            feedbackTempo = corretivoVariacoes[Math.floor(Math.random() * corretivoVariacoes.length)];
+                        }
+                    }
+                } catch (e) {
+                    feedbackTempo = "";
+                }
+
                 await axios.post(URL_GOOGLE_SCRIPT, { action: "finalizar", id: registroAtivo.ID, usuario: remetente });
                 
                 let textoFim = `✅ *LAVAGEM ENCERRADA!* \n\nA máquina da JK Universitário foi liberada por @${remetente.split("@")[0]}.`;
@@ -163,11 +203,44 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                 } else {
                     textoFim += `\n\n✨ *MÁQUINA DISPONÍVEL:* Não há ninguém na fila no momento.`;
                 }
+
+                textoFim += feedbackTempo;
                 textoFim += `\n\n🧼 *Lembrete:* Deixe a tampa aberta para evitar mofo!`;
-                return sock.sendMessage(grupoId, { text: textoFim, mentions: mencoesFim });
+                
+                await sock.sendMessage(grupoId, { text: textoFim, mentions: mencoesFim });
+
+                // 🌟 AVALIAÇÃO COM DELAY DE 3 MINUTOS (180000ms)
+                setTimeout(async () => {
+                    try {
+                        const msgAvaliacao = `⭐ *AVALIAÇÃO DO ASSISTENTE - JK*\n\n` +
+                            `Olá, @${remetente.split("@")[0]}! Como foi a sua experiência com o nosso bot e a organização da lavanderia hoje?\n\n` +
+                            `Por favor, avalie de *1 a 5 estrelas*:\n` +
+                            `1️⃣ - Péssimo\n` +
+                            `2️⃣ - Ruim\n` +
+                            `3️⃣ - Regular\n` +
+                            `4️⃣ - Bom\n` +
+                            `5️⃣ - Excelente\n\n` +
+                            `_Sua opinião é muito importante para melhorarmos cada vez mais!_ 🤝`;
+
+                        await sock.sendMessage(grupoId, { text: msgAvaliacao, mentions: [remetente] });
+                    } catch (errEval) {
+                        console.error("❌ Erro ao enviar mensagem de avaliação com delay:", errEval.message);
+                    }
+                }, 180000); // 3 minutos
+
+                return;
             }
 
             case "5": {
+                const agoraSP = moment().tz(TIMEZONE);
+                if (agoraSP.hour() < 7 || agoraSP.hour() >= 20) {
+                    await sock.sendMessage(grupoId, { text: `⏳ A verificar as regras de horário... Por favor, aguarde.` });
+                    const promptFilaHorario = `O morador ${nomeMorador} tentou entrar na fila de espera da lavanderia às ${agoraSP.format("HH:mm")}, mas o horário permitido é das 07:00 às 20:00 (limite para início). Escreva uma mensagem amigável explicando que não é possível entrar na fila fora do horário de funcionamento, mencionando o morador (@${remetente.split("@")[0]}).`;
+                    let msgIA = await gerarRespostaGemini(promptFilaHorario);
+                    if (!msgIA) msgIA = `⚠️ @${remetente.split("@")[0]}, não é possível entrar na fila de espera neste horário. A lavanderia funciona das 07:00 às 22:00, com último início às 20:00. Retorne no horário de atendimento! ⏰`;
+                    return sock.sendMessage(grupoId, { text: msgIA, mentions: [remetente] });
+                }
+
                 if (filaEspera.some(f => f.usuario === remetente)) {
                     return sock.sendMessage(grupoId, { text: `⏳ @${remetente.split("@")[0]}, você já consta na fila de espera! Aguarde sua vez.`, mentions: [remetente] });
                 }
@@ -185,11 +258,12 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
             }
 
             case "7": {
+                await sock.sendMessage(grupoId, { text: `⏳ A calcular as sugestões de peso... Por favor, aguarde, retorno com a resposta em até 2 minutos.` });
                 const promptPeso = "Monte uma sugestão criativa de combinação de roupas (pesando no total cerca de 7.5kg a 8kg) para ajudar um morador a entender o limite seguro de carga da máquina de lavar.";
                 let comboIA = await gerarRespostaGemini(promptPeso);
                 if (!comboIA) comboIA = "👖 *Combo Sugerido:* 4 calças jeans + 10 camisetas + peças leves (Total ~8kg).";
                 
-                return sock.sendMessage(grupoId, { text: `🧺 *GUIA DE USO CONSCIENTE (Gemini)*\n\nPara preservar o equipamento, o limite é **8kg**.\n\n${comboIA}\n\n❌ *PROIBIDO:* Tênis, Edredons Casal/Queen e Tapetes.` });
+                return sock.sendMessage(grupoId, { text: `🧺 *GUIA DE USO CONSCIENTE (Gemini)*\n\nPara preservar o equipamento, o limite é **8kg**.\n\n${comboIA}\n\n❌ *PROIBIDO:* edredons em geral, tênis em geral, tapetes em geral, travesseiros em geral, cobertores em geral, bichos de pelúcia em geral.` });
             }
 
             case "8": {
@@ -197,6 +271,14 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
             }
 
             case "9": {
+                const agoraSP = moment().tz(TIMEZONE);
+                // Bloqueia a dica/consulta de clima se for após as 20:00 ou antes das 07:00
+                if (agoraSP.hour() < 7 || agoraSP.hour() >= 20) {
+                    const msgHorarioClima = `⚠️ @${remetente.split("@")[0]}, a consulta de tempo para lavagem não está disponível agora. A lavanderia encerra os inícios de ciclos às 20:00 e funciona até às 22:00. Bom descanso! 🌙`;
+                    return sock.sendMessage(grupoId, { text: msgHorarioClima, mentions: [remetente] });
+                }
+
+                await sock.sendMessage(grupoId, { text: `⏳ A consultar a previsão do tempo... Por favor, aguarde, retorno com a resposta em até 2 minutos.` });
                 try {
                     const resClima = await axios.get(`https://api.hgbrasil.com/weather?key=${HG_API_KEY}&city_name=Viamao,RS`);
                     const w = resClima.data.results;
@@ -208,14 +290,34 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                     return sock.sendMessage(grupoId, { text: "⚠️ Não foi possível carregar a previsão do tempo no momento." });
                 }
             }
+            }
 
             case "10": {
-                const hojeDia = moment().tz(TIMEZONE).day(); 
-                const avisoLixo = [2,4,6].includes(hojeDia) ? "\n\n🚨 *HOJE TEM COLETA!*" : "";
-                return sock.sendMessage(grupoId, { text: `🗑️ *Coleta de Lixo:* Ter, Qui e Sab (após 17h).${avisoLixo}` });
+                const hojeDia = moment().tz(TIMEZONE).day(); // 2 = Terça, 4 = Quinta, 6 = Sábado
+                const temColetaHoje = [2, 4, 6].includes(hojeDia);
+                const avisoLixo = temColetaHoje ? "\n\n🚨 *HOJE TEM COLETA DE LIXO DA PREFEITURA!*" : "\n\n📅 *Hoje NÃO é dia de coleta oficial.*";
+
+                await sock.sendMessage(grupoId, { text: `⏳ A consultar as orientações de descarte e coleta... Por favor, aguarde.` });
+
+                const promptLixo = `Escreva uma orientação prática, comunitária e educativa sobre o descarte de lixo na Pousada JK. Contexto atual: ${temColetaHoje ? "Hoje TEM coleta de lixo da prefeitura (terças, quintas e sábados)." : "Hoje NÃO é dia de coleta oficial."} 
+                Regras que você deve transmitir:
+                1. Reforçar a separação correta entre lixo reciclável e orgânico.
+                2. Informar que o descarte nos latões dos prédios deve ser feito até as 16 horas no dia que tem a coleta de lixo pela prefeitura.
+                3. ${temColetaHoje ? "Como os sacos de lixo já devem estar postos na rua/calçada para a coleta que ocorre após as 17h, oriente o morador a colocar o lixo diretamente na calçada com a sacola/saco de lixo devidamente amarrado se ainda não o fez, ou verificar se já está lá." : "Lembrar que nos dias sem coleta, o lixo deve ser mantido nos latões internos ou descartado corretamente sem acumular fora do horário."}
+                Mantenha um tom amigável, educado e use emojis moderados.`;
+
+                let dicasLixoIA = await gerarRespostaGemini(promptLixo);
+                if (!dicasLixoIA) {
+                    dicasLixoIA = `🗑️ *Orientações Gerais:*\n- Separe sempre o lixo reciclável do orgânico.\n- Descarte nos latões dos prédios até as 16h.\n- Nos dias de coleta (Ter, Qui, Sáb após 17h), o lixo vai para a calçada.`;
+                }
+
+                return sock.sendMessage(grupoId, { 
+                    text: `🗑️ *COLETA E DESCARTE DE LIXO - JK*\n\nTerças, Quintas e Sábados (após 17h).${avisoLixo}\n\n${dicasLixoIA}\n\n_Colabora com a limpeza da nossa pousada!_ 🌿` 
+                });
             }
 
             default: {
+                await sock.sendMessage(grupoId, { text: `⏳ A processar sua dúvida... Por favor, aguarde, retorno com a resposta em até 2 minutos.` });
                 const respostaLivre = await gerarRespostaGemini(`O morador ${nomeMorador} disse: "${texto}". Responda à dúvida dele relacionada à lavanderia ou regras da Pousada JK.`);
                 if (respostaLivre) {
                     return sock.sendMessage(grupoId, { text: respostaLivre });
@@ -232,12 +334,27 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
 export function configurarEventosGrupo(sock) {
     sock.ev.on('group-participants.update', async (num) => {
         const idGrupo = num.id;
+        
+        // Verifica se o evento aconteceu estritamente num grupo de lavanderia
+        const gruposLavanderia = process.env.GRUPOS_LAVANDERIA?.split(",").map(id => id.trim()) || [];
+        if (!gruposLavanderia.includes(idGrupo)) return;
+
         for (const participante of num.participants) {
-            const nomeParticipante = (await sock.getName(participante)) || participante.split('@')[0];
+            let nomeParticipante = participante.split('@')[0];
+            try {
+                nomeParticipante = (await sock.getName(participante)) || nomeParticipante;
+            } catch (e) {}
+
             const saudacao = obterSaudacao();
+
             if (num.action === 'add') {
-                await sock.sendMessage(idGrupo, { text: `👋 ${saudacao}! Seja bem-vindo(a) à **JK Universitário** *${nomeParticipante}*!\n\nSou o assistente da nossa lavanderia. Digite *Menu* para conhecer as regras. 🧺`, mentions: [participante] });
+                await sock.sendMessage(idGrupo, { 
+                    text: `👋 ${saudacao}! Seja bem-vindo(a) à **JK Universitário** @${participante.split('@')[0]}!\n\nSou o assistente da nossa lavanderia. Digite *Menu* para conhecer as regras. 🧺`, 
+                    mentions: [participante] 
+                });
                 await axios.post(URL_GOOGLE_SCRIPT, { action: "log_evento", usuario: participante, nome: nomeParticipante, evento: "entrou" }).catch(()=>{});
+            } else if (num.action === 'remove') {
+                await axios.post(URL_GOOGLE_SCRIPT, { action: "log_evento", usuario: participante, nome: nomeParticipante, evento: "saiu" }).catch(()=>{});
             }
         }
     });
