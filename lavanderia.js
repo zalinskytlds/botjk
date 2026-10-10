@@ -263,7 +263,7 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                 let comboIA = await gerarRespostaGemini(promptPeso);
                 if (!comboIA) comboIA = "👖 *Combo Sugerido:* 4 calças jeans + 10 camisetas + peças leves (Total ~8kg).";
                 
-                return sock.sendMessage(grupoId, { text: `🧺 *GUIA DE USO CONSCIENTE (Gemini)*\n\nPara preservar o equipamento, o limite é **8kg**.\n\n${comboIA}\n\n❌ *PROIBIDO:* edredons em geral, tênis em geral, tapetes em geral, travesseiros em geral, cobertores em geral, bichos de pelúcia em geral.` });
+                return sock.sendMessage(grupoId, { text: `🧺 *GUIA DE USO CONSCIENTE (Gemini)*\n\nPara preservar o equipamento, o limite é **8kg**.\n\n${comboIA}\n\n❌ *PROIBIDO:* Tênis, Edredons Casal/Queen e Tapetes.` });
             }
 
             case "8": {
@@ -272,7 +272,6 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
 
             case "9": {
                 const agoraSP = moment().tz(TIMEZONE);
-                // Bloqueia a dica/consulta de clima se for após as 20:00 ou antes das 07:00
                 if (agoraSP.hour() < 7 || agoraSP.hour() >= 20) {
                     const msgHorarioClima = `⚠️ @${remetente.split("@")[0]}, a consulta de tempo para lavagem não está disponível agora. A lavanderia encerra os inícios de ciclos às 20:00 e funciona até às 22:00. Bom descanso! 🌙`;
                     return sock.sendMessage(grupoId, { text: msgHorarioClima, mentions: [remetente] });
@@ -290,7 +289,6 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                     return sock.sendMessage(grupoId, { text: "⚠️ Não foi possível carregar a previsão do tempo no momento." });
                 }
             }
-            }
 
             case "10": {
                 const hojeDia = moment().tz(TIMEZONE).day(); // 2 = Terça, 4 = Quinta, 6 = Sábado
@@ -302,8 +300,8 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                 const promptLixo = `Escreva uma orientação prática, comunitária e educativa sobre o descarte de lixo na Pousada JK. Contexto atual: ${temColetaHoje ? "Hoje TEM coleta de lixo da prefeitura (terças, quintas e sábados)." : "Hoje NÃO é dia de coleta oficial."} 
                 Regras que você deve transmitir:
                 1. Reforçar a separação correta entre lixo reciclável e orgânico.
-                2. Informar que o descarte nos latões dos prédios deve ser feito até as 16 horas no dia que tem a coleta de lixo pela prefeitura.
-                3. ${temColetaHoje ? "Como os sacos de lixo já devem estar postos na rua/calçada para a coleta que ocorre após as 17h, oriente o morador a colocar o lixo diretamente na calçada com a sacola/saco de lixo devidamente amarrado se ainda não o fez, ou verificar se já está lá." : "Lembrar que nos dias sem coleta, o lixo deve ser mantido nos latões internos ou descartado corretamente sem acumular fora do horário."}
+                2. Informar que o descarte nos latões dos prédios deve ser feito até as 16 horas.
+                3. ${temColetaHoje ? "Como os sacos de lixo já devem estar postos na rua/calçada para a coleta que ocorre após as 17h, oriente o morador a colocar o lixo diretamente na calçada se ainda não o fez, ou verificar se já está lá." : "Lembrar que nos dias sem coleta, o lixo deve ser mantido nos latões internos ou descartado corretamente sem acumular fora do horário."}
                 Mantenha um tom amigável, educado e use emojis moderados.`;
 
                 let dicasLixoIA = await gerarRespostaGemini(promptLixo);
@@ -335,7 +333,6 @@ export function configurarEventosGrupo(sock) {
     sock.ev.on('group-participants.update', async (num) => {
         const idGrupo = num.id;
         
-        // Verifica se o evento aconteceu estritamente num grupo de lavanderia
         const gruposLavanderia = process.env.GRUPOS_LAVANDERIA?.split(",").map(id => id.trim()) || [];
         if (!gruposLavanderia.includes(idGrupo)) return;
 
@@ -349,7 +346,7 @@ export function configurarEventosGrupo(sock) {
 
             if (num.action === 'add') {
                 await sock.sendMessage(idGrupo, { 
-                    text: `👋 ${saudacao}! Seja bem-vindo(a) à **JK Universitário** @${participante.split('@')[0]}!\n\nSou o assistente da nossa lavanderia. Digite *Menu* para conhecer as regras. 🧺`, 
+                    text: `👋 ${saudacao}! Seja bem-vindo(a) à *JK Universitário* @${participante.split('@')[0]}!\n\nSou o assistente da nossa lavanderia. Digite *Menu* para conhecer as regras. 🧺`, 
                     mentions: [participante] 
                 });
                 await axios.post(URL_GOOGLE_SCRIPT, { action: "log_evento", usuario: participante, nome: nomeParticipante, evento: "entrou" }).catch(()=>{});
