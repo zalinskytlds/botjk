@@ -45,7 +45,7 @@ async function enviarLogErro(erroMsg, usuario = "Desconhecido", detalhes = "") {
     }
 }
 
-// Função auxiliar atualizada para garantir compatibilidade total com a SDK do Gemini
+// Função atualizada para usar a estrutura correta da SDK @google/genai
 async function gerarRespostaGemini(promptUsuario) {
     try {
         console.log("🤖 [GEMINI] A iniciar chamada para o modelo gemini-3.8-flash...");
@@ -57,12 +57,10 @@ async function gerarRespostaGemini(promptUsuario) {
 
         const response = await ai.models.generateContent({
             model: 'gemini-3.8-flash',
-            contents: [
-                {
-                    role: 'user',
-                    parts: [{ text: `${SISTEMA_BASE_JK}\n\nInstrução ou Pergunta do Morador: ${promptUsuario}` }]
-                }
-            ]
+            contents: promptUsuario,
+            config: {
+                systemInstruction: SISTEMA_BASE_JK
+            }
         });
         
         console.log("🤖 [GEMINI] Resposta gerada com sucesso!");
