@@ -45,7 +45,7 @@ async function enviarLogErro(erroMsg, usuario = "Desconhecido", detalhes = "") {
     }
 }
 
-// Função atualizada para usar a estrutura correta da SDK @google/genai
+// Função restaurada para o formato exato que funcionava no lavanderia.js
 async function gerarRespostaGemini(promptUsuario) {
     try {
         console.log("🤖 [GEMINI] A iniciar chamada para o modelo gemini-3.8-flash...");
@@ -57,10 +57,12 @@ async function gerarRespostaGemini(promptUsuario) {
 
         const response = await ai.models.generateContent({
             model: 'gemini-3.8-flash',
-            contents: promptUsuario,
-            config: {
-                systemInstruction: SISTEMA_BASE_JK
-            }
+            contents: [
+                {
+                    role: 'user',
+                    parts: [{ text: `${SISTEMA_BASE_JK}\n\nInstrução ou Pergunta do Morador: ${promptUsuario}` }]
+                }
+            ]
         });
         
         console.log("🤖 [GEMINI] Resposta gerada com sucesso!");
@@ -428,7 +430,7 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
 
             default: {
                 await sock.sendMessage(grupoId, { text: `⏳ A processar sua dúvida... Por favor, aguarde, retorno com a resposta em até 2 minutos.` });
-                const respostaLivre = await gerarRespostaGemini(`O morador ${nomeMorador} disse: "${texto}". Responda à dúvida dele relacionada à lavanderia ou regras da Pousada JK.`);
+                const respostaLivre = await gerarRespostaGemini(`O morador ${nomeMorador} disse: "${texto}". Responda à dúvida dela relacionada à lavanderia ou regras da Pousada JK.`);
                 if (respostaLivre) {
                     return sock.sendMessage(grupoId, { text: respostaLivre });
                 }
