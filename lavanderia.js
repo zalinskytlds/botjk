@@ -1,10 +1,12 @@
 import axios from "axios";
 import moment from "moment-timezone";
 import { GoogleGenAI } from "@google/genai";
+import cron from "node-cron";
 
 const URL_GOOGLE_SCRIPT = process.env.URL_GOOGLE_LAVANDERIA; 
 const HG_API_KEY = process.env.HGBR_API_KEY; 
 const TIMEZONE = "America/Sao_Paulo";
+const GRUPOS_LAVANDERIA = process.env.GRUPOS_LAVANDERIA?.split(",").map(id => id.trim()) || [];
 
 // Inicializa o Gemini buscando a chave do ambiente configurada no Render
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -75,6 +77,118 @@ async function gerarRespostaGemini(promptUsuario) {
         await enviarLogErro(error.message || String(error), "Sistema (Gemini)", "Erro ao gerar resposta com o Gemini no módulo de lavanderia");
         return null;
     }
+}
+
+// ⏰ ROTINAS AUTOMÁTICAS (CRON)
+export function iniciarRotinasAutomaticas(sock) {
+    
+    // 1️⃣ ROTINA DE ABERTURA (07:00 da manhã)
+    cron.schedule('0 7 * * *', async () => {
+        console.log("🌅 [CRON] Executando rotina de bom dia e abertura da lavanderia...");
+        try {
+            for (const grupoId of GRUPOS_LAVANDERIA) {
+                const msgAbertura = `🌅 *Bom dia, Pousada JK!* \n\n` +
+                    `🧺 A nossa lavanderia já está *aberta* e pronta para uso hoje!\n` +
+                    `⏰ O horário de funcionamento é das 07:00 às 22:00 (com último horário de início às 20:00).\n\n` +
+                    `Tenham todos uma excelente e produtiva terça-feira! 🤝✨`;
+                
+                await sock.sendMessage(grupoId, { text: msgAbertura });
+            }
+        } catch (err) {
+            console.error("❌ Erro na rotina de abertura das 07:00:", err.message);
+        }
+    }, { scheduled: true, timezone: TIMEZONE });
+
+    // 2️⃣ BOLETIM DO TEMPO (07:15 da manhã)
+    cron.schedule('15 7 * * *', async () => {
+        console.log("🌤️ [CRON] Buscando boletim de previsão do tempo...");
+        try {
+            const resClima = await axios.get(`https://api.hgbrasil.com/weather?key=${HG_API_KEY}&city_name=Viamao,RS`);
+            const w = resClima.data.results;
+            
+            const promptClimaReport = `Com base nestes dados de Viamão: Clima ${w.description}, Temperatura ${w.temp}°C, Umidade ${w.humidity}%, crie um panorama prático e útil para quem está pensando em lavar e secar roupa no varal hoje.`;
+            const relatorioClima = await gerarRespostaGemini(promptClimaReport) || `🌡️ *Temp:* ${w.temp}°C\n💧 *Umidade:* ${w.humidity}%\n☁️ *Condição:* ${w.description}`;
+
+            for (const grupoId of GRUPOS_LAVANDERIA) {
+                const msgClima = `🌤️ *BOLETIM METEOROLÓGICO - VIAMÃO*\n\n` +
+                    `${relatorioClima}\n\n` +
+                    `_Bom dia a todos e ótimo dia de lavagem!_ 🧺`;
+                
+                await sock.sendMessage(grupoId, { text: msgClima });
+            }
+        } catch (err) {
+            console.error("❌ Erro ao enviar boletim do tempo às 07:15:", err.message);
+        }
+    }, { scheduled: true, timezone: TIMEZONE });
+
+    // 3️⃣ AVISO DE LAVANDERIA FECHADA (22:10)
+    cron.schedule('10 22 * * *', async () => {
+        console.log("🌙 [CRON] Executando aviso de lavanderia fechada às 22:10...");
+        try {
+            for (const grupoId of GRUPOS_LAVANDERIA) {
+                const msgFechamento = `🌙 *LAVANDERIA FECHADA - Pousada JK*\n\n` +
+                    `🛑 O horário de funcionamento da lavanderia encerrou às 22:00.\n` +
+                    `🤫 Pedimos a colaboração de todos para mantermos o silêncio e o bom descanso na pousada.\n\n` +
+                    `Aproveitem a noite e até amanhã às 07:00! ✨`;
+                
+                await sock.sendMessage(grupoId, { text: msgFechamento });
+            }
+        } catch (err) {
+            console.error("❌ Erro ao enviar aviso de fechamento às 22:10:", err.message);
+        }
+    }, { scheduled: true, timezone: TIMEZONE });
+
+    // 4️⃣ ROTINA NOTURNA DE AUDITORIA E LIMPEZA (23:00)
+    cron.schedule('0 23 * * *', async () => {
+        console.log("🌙 [CRON] Executando verificação automática das 23h na planilha...");
+        
+        try {
+            const response = await axios.get(URL_GOOGLE_SCRIPT);
+            const data = Array.isArray(response.data) ? response.data : [];
+            const registroAtivo = data.find(r => r.status === "em_uso");
+            const filaEspera = data.filter(r => r.status === "na_fila");
+
+            for (const grupoId of GRUPOS_LAVANDERIA) {
+                if (registroAtivo) {
+                    const userEmUso = registroAtivo.usuario;
+                    const mencaoUser = userEmUso.split("@")[0];
+
+                    const msgAvisoUso = `🌙 *ALERTA DE EQUIPAMENTO - LAVANDERIA JK*\n\n` +
+                        `Olá @${mencaoUser}! A lavanderia encerrou o horário às 22:00 e consta que você ainda não finalizou seu ciclo na planilha.\n\n` +
+                        `Por favor, lembre-se de recolher suas roupas e digitar *4* para liberar o sistema! 🧺`;
+
+                    await sock.sendMessage(grupoId, { text: msgAvisoUso, mentions: [userEmUso] });
+                    await enviarLogErro(
+                        `Máquina esquecida em uso após as 23h`, 
+                        userEmUso, 
+                        `Aviso automático das 23h enviado no grupo para @${mencaoUser}`
+                    );
+                }
+
+                if (filaEspera.length > 0) {
+                    const mencoesFila = filaEspera.map(f => f.usuario);
+                    const nomesFila = mencoesFila.map(u => `@${u.split("@")[0]}`).join(", ");
+
+                    const msgAvisoFila = `🌙 *AVISO DE FILA - LAVANDERIA JK*\n\n` +
+                        `Atenção ${nomesFila}: O horário de funcionamento encerrou às 22:00 e vocês ainda constavam na fila de espera.\n\n` +
+                        `A fila será limpa para o dia de amanhã. Lembramos que os ciclos iniciam novamente às 07:00! ⏰`;
+
+                    await sock.sendMessage(grupoId, { text: msgAvisoFila, mentions: mencoesFila });
+                }
+            }
+
+            if (filaEspera.length > 0 || registroAtivo) {
+                await axios.post(URL_GOOGLE_SCRIPT, { action: "limparFilaNoite" }).catch(() => {});
+            }
+
+            console.log("✅ [CRON] Verificação automática das 23h concluída com sucesso.");
+        } catch (err) {
+            console.error("❌ [CRON] Erro ao executar a rotina automática das 23h:", err.message);
+        }
+    }, {
+        scheduled: true,
+        timezone: TIMEZONE
+    });
 }
 
 export async function tratarMensagemLavanderia(sock, msg, grupoId) {
@@ -156,6 +270,27 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                     `2️⃣ *LIMITE DE 2 HORAS* para evitar retenção da máquina.\n\n` +
                     `_Você receberá um aviso antes do término!_ 🤝`;
 
+                // ⏱️ TEMPORIZADOR DE 2 HORAS PARA O INQUILINO ESPECÍFICO
+                const usuarioQueIniciou = remetente;
+                setTimeout(async () => {
+                    try {
+                        const resChecagem = await axios.get(URL_GOOGLE_SCRIPT);
+                        const dadosAtuais = Array.isArray(resChecagem.data) ? resChecagem.data : [];
+                        const aindaEmUso = dadosAtuais.find(r => r.status === "em_uso" && r.usuario === usuarioQueIniciou);
+
+                        if (aindaEmUso) {
+                            const mencao = usuarioQueIniciou.split("@")[0];
+                            const msgAlertaTempo = `⚠️ *ATENÇÃO AO TEMPO, @${mencao}!* \n\n` +
+                                `Já se passaram *2 horas* desde que você iniciou a sua lavagem. ` +
+                                `Por favor, verifique a máquina e lembre-se de digitar *4* para finalizar e liberar o equipamento para o próximo colega! ⏱️🤝`;
+
+                            await sock.sendMessage(grupoId, { text: msgAlertaTempo, mentions: [usuarioQueIniciou] });
+                        }
+                    } catch (errTemp) {
+                        console.error("❌ Erro no temporizador de 2 horas:", errTemp.message);
+                    }
+                }, 7200000); // 2 horas (120 min)
+
                 return sock.sendMessage(grupoId, { text: msgSucesso, mentions: [remetente] });
             }
 
@@ -207,28 +342,7 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
                 textoFim += feedbackTempo;
                 textoFim += `\n\n🧼 *Lembrete:* Deixe a tampa aberta para evitar mofo!`;
                 
-                await sock.sendMessage(grupoId, { text: textoFim, mentions: mencoesFim });
-
-                // 🌟 AVALIAÇÃO COM DELAY DE 3 MINUTOS (180000ms)
-                setTimeout(async () => {
-                    try {
-                        const msgAvaliacao = `⭐ *AVALIAÇÃO DO ASSISTENTE - JK*\n\n` +
-                            `Olá, @${remetente.split("@")[0]}! Como foi a sua experiência com o nosso bot e a organização da lavanderia hoje?\n\n` +
-                            `Por favor, avalie de *1 a 5 estrelas*:\n` +
-                            `1️⃣ - Péssimo\n` +
-                            `2️⃣ - Ruim\n` +
-                            `3️⃣ - Regular\n` +
-                            `4️⃣ - Bom\n` +
-                            `5️⃣ - Excelente\n\n` +
-                            `_Sua opinião é muito importante para melhorarmos cada vez mais!_ 🤝`;
-
-                        await sock.sendMessage(grupoId, { text: msgAvaliacao, mentions: [remetente] });
-                    } catch (errEval) {
-                        console.error("❌ Erro ao enviar mensagem de avaliação com delay:", errEval.message);
-                    }
-                }, 180000); // 3 minutos
-
-                return;
+                return sock.sendMessage(grupoId, { text: textoFim, mentions: mencoesFim });
             }
 
             case "5": {
@@ -330,6 +444,9 @@ export async function tratarMensagemLavanderia(sock, msg, grupoId) {
 }
 
 export function configurarEventosGrupo(sock) {
+    // 🚀 INICIALIZA TODAS AS ROTINAS AUTOMÁTICAS (07:00, 07:15, 22:10 e 23:00)
+    iniciarRotinasAutomaticas(sock);
+
     sock.ev.on('group-participants.update', async (num) => {
         const idGrupo = num.id;
         
