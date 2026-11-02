@@ -213,7 +213,20 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
             }
         }
 
-        // --- 5. OPÇÕES DO MENU ---
+        // --- 5. DETECÇÃO INTELIGENTE DE PERGUNTAS SOBRE ENCOMENDAS NÃO REGISTRADAS ---
+        // Se a mensagem parecer uma dúvida sobre entrega (ex: "alguém recebeu", "chegou", "app diz que entregou")
+        if (!sessoesEncomenda[jid] && (textoLow.includes("recebeu") || textoLow.includes("entregue") || textoLow.includes("chegou")) && !["1", "2", "3", "4", "menu"].includes(textoLow)) {
+            const resCons = await axios.post(URL, { action: "consultar" });
+            const lista = resCons.data.lista || [];
+            
+            // Verifica se há alguma encomenda pendente na aba de logs
+            if (lista.length > 0) {
+                let avisoInteligente = `🔍 Olá! Dei uma olhada na planilha de controle de encomendas pendentes e não encontrei nenhum registro ativo correspondente. Como não foi anotada com antecedência, não temos como saber quem recebeu por aqui. Se alguém da administração ou vizinho pegou para você, confirme com eles! 📋`;
+                return sock.sendMessage(grupoId, { text: avisoInteligente });
+            }
+        }
+
+        // --- 6. OPÇÕES DO MENU ---
         switch (textoLow) {
             case "1":
                 sessoesEncomenda[jid] = { etapa: "pergunta_data" };
@@ -260,7 +273,7 @@ export async function tratarMensagemEncomendas(sock, msg, grupoId) {
                 let msgHist = "📜 *ÚLTIMAS ENTREGAS REALIZADAS*\n";
                 msgHist += "__________________________\n\n";
 
-                listaH.slice(-10).reverse().forEach(r => {
+                listaH.forEach(r => {
                     msgHist += `✅ *ID ${r[0]}* | ${r[3]}\n`;
                     msgHist += `📦 *ORIGEM:* ${r[2].toUpperCase()}\n`; 
                     msgHist += `🏁 *ENTREGUE EM:* ${r[6]}\n`;
