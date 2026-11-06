@@ -7,6 +7,7 @@ import pino from "pino";
 // Importando as funções de tratamento e os novos configuradores de eventos
 import { tratarMensagemLavanderia, configurarEventosGrupo as eventosLavanderia } from "./lavanderia.js"; 
 import { tratarMensagemEncomendas, configurarEventosEncomendas } from "./encomendas.js";
+import { registrarMensagemGrupo } from "./logger.js"; // 👈 1. Importando o novo módulo de log
 
 const app = express();
 app.use(express.json()); 
@@ -83,13 +84,20 @@ async function conectarWhatsApp() {
         // 🛡️ PROTEÇÃO: Ignora mensagens LID ou chats que não sejam mensagens válidas
         if (!jid || jid.includes('@lid')) return;
 
+        const nomeMorador = msg.pushName || "Morador Desconhecido"; // 👈 Nome obtido do WhatsApp
+
+        // 💬 2. REGISTRA AUTOMATICAMENTE QUALQUER MENSAGEM DO GRUPO NA PLANILHA (VIA LOGGER)
+        const listaLavanderia = obterGrupos("GRUPOS_LAVANDERIA");
+        const listaEncomendas = obterGrupos("GRUPOS_ENCOMENDAS");
+
+        if (listaLavanderia.has(jid) || listaEncomendas.has(jid)) {
+            registrarMensagemGrupo(msg, nomeMorador);
+        }
+
         const textoChat = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim().toLowerCase();
         
         // Ignora se a mensagem veio sem nenhum texto
         if (!textoChat) return;
-
-        const listaLavanderia = obterGrupos("GRUPOS_LAVANDERIA");
-        const listaEncomendas = obterGrupos("GRUPOS_ENCOMENDAS");
 
         console.log(`📩 [MENSAGEM RECEBIDA] De: ${jid} | Texto: "${textoChat}"`);
 
