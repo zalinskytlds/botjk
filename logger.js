@@ -1,16 +1,22 @@
 import axios from "axios";
 
 const URL_GOOGLE_SCRIPT = process.env.URL_GOOGLE_LAVANDERIA;
+const GRUPOS_LAVANDERIA = process.env.GRUPOS_LAVANDERIA?.split(",").map(id => id.trim()) || [];
 
 /**
- * Registra qualquer mensagem trocada nos grupos monitorados em uma aba da planilha.
+ * Registra apenas as mensagens trocadas nos grupos oficiais da lavanderia na planilha.
  */
 export async function registrarMensagemGrupo(msg, nomeMorador) {
     try {
         if (!URL_GOOGLE_SCRIPT) return;
 
+        const jid = msg.key?.remoteJid || "";
+
+        // 🛡️ Filtra para garantir que só registra mensagens dos grupos da lavanderia informados
+        if (!GRUPOS_LAVANDERIA.includes(jid)) return;
+
         const textoMensagem = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
-        // Se a mensagem não contiver texto (ex: apenas figurinha ou áudio puro), ignorar ou tratar
+        // Se a mensagem não contiver texto (ex: figurinhas ou áudios puros), ignora
         if (!textoMensagem) return;
 
         const remetente = msg.key?.participant || msg.key?.remoteJid || "";
