@@ -4,7 +4,7 @@ const URL_GOOGLE_SCRIPT = process.env.URL_GOOGLE_LAVANDERIA;
 const GRUPOS_LAVANDERIA = process.env.GRUPOS_LAVANDERIA?.split(",").map(id => id.trim()) || [];
 
 /**
- * Registra mensagens enviadas pelos moradores nos grupos oficiais.
+ * Registra tanto as mensagens dos moradores quanto as respostas do próprio bot nos grupos oficiais.
  */
 export async function registrarMensagemGrupo(msg, nomeMorador) {
     try {
@@ -16,40 +16,22 @@ export async function registrarMensagemGrupo(msg, nomeMorador) {
         const textoMensagem = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
         if (!textoMensagem) return;
 
-        const remetente = msg.key?.participant || msg.key?.remoteJid || "";
+        // Verifica se a mensagem foi enviada pelo próprio Bot (fromMe = true)
+        const ehDoBot = msg.key?.fromMe;
+        const usuario = ehDoBot ? "Bot_JK" : (msg.key?.participant || jid);
+        const nome = ehDoBot ? "Assistente Lavanderia" : (nomeMorador || "Morador Desconhecido");
 
+        // Envia para a planilha na aba "registro_conversas"
         axios.post(URL_GOOGLE_SCRIPT, {
             action: "log_mensagem",
-            usuario: remetente,
-            nome: nomeMorador || "Morador Desconhecido",
+            usuario: usuario,
+            nome: nome,
             mensagem: textoMensagem
         }).catch(err => {
-            console.error("❌ Erro ao enviar mensagem do morador para a planilha:", err.message);
+            console.error("❌ Erro ao enviar log para a planilha:", err.message);
         });
 
     } catch (e) {
-        console.error("❌ Falha interna no logger (morador):", e.message);
-    }
-}
-
-/**
- * Registra as respostas enviadas pelo próprio Bot na planilha.
- */
-export async function registrarRespostaBot(grupoId, textoMensagem) {
-    try {
-        if (!URL_GOOGLE_SCRIPT || !textoMensagem) return;
-        if (!GRUPOS_LAVANDERIA.includes(grupoId)) return;
-
-        axios.post(URL_GOOGLE_SCRIPT, {
-            action: "log_mensagem",
-            usuario: "Bot_JK",
-            nome: "Assistente Lavanderia",
-            mensagem: textoMensagem
-        }).catch(err => {
-            console.error("❌ Erro ao enviar resposta do bot para a planilha:", err.message);
-        });
-
-    } catch (e) {
-        console.error("❌ Falha interna no logger (bot):", e.message);
+        console.error("❌ Falha interna no módulo logger:", e.message);
     }
 }
