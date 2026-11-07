@@ -4,9 +4,10 @@ import { Boom } from "@hapi/boom";
 import express from "express";
 import QRCode from "qrcode";
 import pino from "pino"; 
+// Importando as funções de tratamento e os configuradores de eventos
 import { tratarMensagemLavanderia, configurarEventosGrupo as eventosLavanderia } from "./lavanderia.js"; 
 import { tratarMensagemEncomendas, configurarEventosEncomendas } from "./encomendas.js";
-import { registrarMensagemGrupo, registrarRespostaBot } from "./logger.js"; // 👈 Importa as duas funções do logger
+import { registrarMensagemGrupo } from "./logger.js"; // 👈 Importa o novo módulo de log
 
 const app = express();
 app.use(express.json()); 
@@ -17,15 +18,6 @@ let statusConexao = "Iniciando...";
 let sock;
 
 const obterGrupos = (envVar) => new Set(process.env[envVar]?.split(",").map(id => id.trim()).filter(id => id) || []);
-
-// 💬 Função auxiliar para o index enviar mensagem e já salvar no logger da planilha
-async function enviarMensagemComLog(grupoId, payload) {
-    const resultado = await sock.sendMessage(grupoId, payload);
-    if (payload && payload.text) {
-        registrarRespostaBot(grupoId, payload.text); // Salva a resposta do bot na planilha
-    }
-    return resultado;
-}
 
 app.get("/", async (req, res) => {
     if (statusConexao === "Conectado") return res.send("<h1>✅ JK Online!</h1>");
@@ -39,12 +31,12 @@ app.post("/aviso-lavanderia", async (req, res) => {
     if (!sock) return res.status(500).send("Bot deslogado");
     try {
         if (jid && jid !== "admin") {
-            await enviarMensagemComLog(grupo, { 
+            await sock.sendMessage(grupo, { 
                 text: `@${jid.split('@')[0]} ${mensagem}`, 
                 mentions: [jid] 
             });
         } else {
-            await enviarMensagemComLog(grupo, { text: mensagem });
+            await sock.sendMessage(grupo, { text: mensagem });
         }
         res.status(200).send("OK");
     } catch (err) {
@@ -65,6 +57,7 @@ async function conectarWhatsApp() {
         markOnlineOnConnect: true
     });
 
+    // --- CONFIGURAÇÃO DE EVENTOS DE GRUPO (ENTRADA/SAÍDA) ---
     eventosLavanderia(sock);
     configurarEventosEncomendas(sock);
 
@@ -84,39 +77,46 @@ async function conectarWhatsApp() {
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
         const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return; // Ignora mensagens do próprio bot aqui para não duplicar eventos duplicados do baileys
+        if (!msg.message) return; // Valida se a mensagem existe
         
         const jid = msg.key.remoteJid;
+
+        // 🛡️ PROTEÇÃO: Ignora mensagens LID ou chats que não sejam mensagens válidas
         if (!jid || jid.includes('@lid')) return;
 
-        const nomeMorador = msg.pushName || "Morador Desconhecido";
+        const nomeMorador = msg.pushName || "Morador Desconhecido"; 
         const listaLavanderia = obterGrupos("GRUPOS_LAVANDERIA");
         const listaEncomendas = obterGrupos("GRUPOS_ENCOMENDAS");
 
-        // 💬 1. Registra a mensagem enviada pelo morador na planilha
+        // 💬 REGISTA AUTOMATICAMENTE NA PLANILHA (Tanto as mensagens do morador quanto as respostas do bot)
         if (listaLavanderia.has(jid)) {
             registrarMensagemGrupo(msg, nomeMorador);
         }
 
+        // 🛡️ BLOQUEIO DE RESPOSTA INTERNA: Impede que o bot responda às suas próprias mensagens
+        if (msg.key.fromMe) return;
+
         const textoChat = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim().toLowerCase();
+        
+        // Ignora se a mensagem veio sem nenhum texto
         if (!textoChat) return;
 
         console.log(`📩 [MENSAGEM RECEBIDA] De: ${jid} | Texto: "${textoChat}"`);
 
         try {
-            if (textoChat === "teste") {
-                return await enviarMensagemComLog(jid, { text: "Teste realizado com sucesso! 😎" });
-            }
+            if (textoChat === "teste") return await sock.sendMessage(jid, { text: "Teste realizado com sucesso! 😎" });
 
+            // 🧺 MÓDULO LAVANDERIA: Apenas nos grupos estritos da lista GRUPOS_LAVANDERIA
             if (listaLavanderia.has(jid)) {
                 console.log("🧺 [LAVANDERIA] Encaminhando mensagem para o módulo...");
-                // Nota: O lavanderia.js usa sock.sendMessage direto. Se quiser que as respostas
-                // geradas pelo lavanderia.js também vão para a planilha por aqui, 
-                // podemos passá-las ou mantê-las independentes.
                 await tratarMensagemLavanderia(sock, msg, jid);
-            } else if (listaEncomendas.has(jid)) {
+            } 
+            // 📦 MÓDULO ENCOMENDAS: Apenas nos grupos estritos da lista GRUPOS_ENCOMENDAS
+            else if (listaEncomendas.has(jid)) {
                 console.log("📦 [ENCOMENDAS] Encaminhando mensagem para o módulo...");
                 await tratarMensagemEncomendas(sock, msg, jid);
+            } else {
+                console.log(`⚠️ [AVISO] O grupo ${jid} não está cadastrado nas listas.`);
             }
         } catch (err) { 
             console.error("❌ Erro no processamento da mensagem:", err); 
